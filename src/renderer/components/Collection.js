@@ -42,7 +42,8 @@ function render(container, { onClose, onSelect }) {
         cell.title = slot.def.name;
         cell.onclick = () => openMemo(memoArea, slot);
       } else {
-        cell.innerHTML = `<div class="slot-placeholder"></div>`;
+        cell.innerHTML = `<img class="silhouette" src="${petAssetPath(slot.def.type, 4)}" alt=""/>`;
+        cell.title = '아직 만나지 못한 정령';
       }
       row.appendChild(cell);
     }

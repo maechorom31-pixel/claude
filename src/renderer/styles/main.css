@@ -253,12 +253,18 @@ button.ghost:hover { background: rgba(200, 180, 160, 0.18); }
   transition: transform 160ms ease, background 160ms ease;
 }
 .slot.filled:hover { background: rgba(255, 250, 244, 1); transform: translateY(-2px); }
-.slot.empty .slot-placeholder {
-  width: 60%;
-  height: 60%;
-  border: 1px dashed rgba(160, 140, 120, 0.4);
-  border-radius: 50%;
+.slot.empty {
+  cursor: default;
+  background: rgba(240, 230, 220, 0.35);
 }
+.slot.empty img.silhouette {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  filter: brightness(0) opacity(0.16);
+  transition: opacity 240ms ease;
+}
+.slot.empty:hover img.silhouette { opacity: 0.24; }
 .slot.filled { background: rgba(255, 252, 246, 0.9); }
 .slot img { width: 90%; height: 90%; object-fit: contain; }
 

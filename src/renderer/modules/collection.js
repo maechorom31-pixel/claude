@@ -5,23 +5,18 @@ function setPetsConfig(cfg) { petsConfig = cfg; }
 
 function getSlots() {
   const s = get();
-  const season = s.season || 1;
   const slots = [];
-  if (season >= 1) {
-    const order = [
-      ...petsConfig.season1.common,
-      ...petsConfig.season1.special
-    ];
-    for (const def of order) {
-      const found = s.collection.find(c => c.type === def.type);
-      slots.push({ shelf: 1, def, entry: found || null });
-    }
+  const season1 = [
+    ...petsConfig.season1.common,
+    ...petsConfig.season1.special
+  ];
+  for (const def of season1) {
+    const found = s.collection.find(c => c.type === def.type);
+    slots.push({ shelf: 1, def, entry: found || null });
   }
-  if (season >= 2 || isSeason1Done(s)) {
-    for (const def of petsConfig.season2) {
-      const found = s.collection.find(c => c.type === def.type);
-      slots.push({ shelf: 2, def, entry: found || null });
-    }
+  for (const def of petsConfig.season2) {
+    const found = s.collection.find(c => c.type === def.type);
+    slots.push({ shelf: 2, def, entry: found || null });
   }
   return slots;
 }
