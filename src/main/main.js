@@ -123,15 +123,23 @@ ipcMain.handle('photo:read', async (_event, filename) => {
   return `data:${mime};base64,${buf.toString('base64')}`;
 });
 
-ipcMain.on('window:drag', (_event, { dx, dy }) => {
-  if (!mainWindow) return;
-  const [x, y] = mainWindow.getPosition();
-  mainWindow.setPosition(x + dx, y + dy);
-});
-
 ipcMain.on('window:setOpacity', (_event, value) => {
   if (!mainWindow) return;
   mainWindow.setOpacity(Math.max(0.3, Math.min(1, value)));
+});
+
+ipcMain.on('window:resize', (_event, { width, height }) => {
+  if (!mainWindow) return;
+  const [x, y] = mainWindow.getPosition();
+  const [oldW, oldH] = mainWindow.getSize();
+  const newX = x + oldW - width;
+  const newY = y + oldH - height;
+  mainWindow.setBounds({
+    x: Math.max(0, newX),
+    y: Math.max(0, newY),
+    width,
+    height
+  }, true);
 });
 
 ipcMain.on('window:quit', () => { app.isQuiting = true; app.quit(); });

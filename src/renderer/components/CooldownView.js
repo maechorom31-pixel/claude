@@ -13,9 +13,15 @@ function render(container) {
     <div class="card cooldown-card">
       <div class="z">zZ</div>
       <div class="msg">아직 쉬는 중이야, 잠시 후에 봐</div>
-      <div class="sub">${fmt(ms)} 후 다시 만나요</div>
+      <div class="sub" data-cooldown-time>${fmt(ms)} 후 다시 만나요</div>
     </div>
   `;
 }
 
-export { render };
+function updateTime(container) {
+  const el = container.querySelector('[data-cooldown-time]');
+  if (!el) return;
+  el.textContent = `${fmt(cooldownRemainingMs())} 후 다시 만나요`;
+}
+
+export { render, updateTime };

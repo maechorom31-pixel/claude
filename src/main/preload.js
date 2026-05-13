@@ -7,8 +7,8 @@ contextBridge.exposeInMainWorld('spiritAPI', {
   loadMissions: () => ipcRenderer.invoke('data:missions'),
   pickPhoto: (petType) => ipcRenderer.invoke('photo:pick', { petType }),
   readPhoto: (filename) => ipcRenderer.invoke('photo:read', filename),
-  dragWindow: (dx, dy) => ipcRenderer.send('window:drag', { dx, dy }),
   setOpacity: (v) => ipcRenderer.send('window:setOpacity', v),
+  resize: (width, height) => ipcRenderer.send('window:resize', { width, height }),
   hide: () => ipcRenderer.send('window:hide'),
   quit: () => ipcRenderer.send('window:quit')
 });

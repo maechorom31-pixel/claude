@@ -25,7 +25,6 @@ async function boot() {
   els.hint = document.getElementById('hint');
   els.card = document.getElementById('card-slot');
   els.panel = document.getElementById('panel-slot');
-  els.dragHandle = document.getElementById('drag-handle');
   els.btnCollection = document.getElementById('open-collection');
   els.btnSettings = document.getElementById('open-settings');
   els.btnHide = document.getElementById('hide-window');
@@ -80,24 +79,6 @@ function bindEvents() {
   els.btnSettings.addEventListener('click', toggleSettings);
   els.btnHide.addEventListener('click', () => window.spiritAPI.hide());
   els.btnQuit.addEventListener('click', () => window.spiritAPI.quit());
-  setupDrag();
-}
-
-function setupDrag() {
-  let dragging = false;
-  let last = { x: 0, y: 0 };
-  els.dragHandle.addEventListener('mousedown', (e) => {
-    dragging = true;
-    last = { x: e.screenX, y: e.screenY };
-  });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    const dx = e.screenX - last.x;
-    const dy = e.screenY - last.y;
-    last = { x: e.screenX, y: e.screenY };
-    window.spiritAPI.dragWindow(dx, dy);
-  });
-  window.addEventListener('mouseup', () => { dragging = false; });
 }
 
 async function onPetClick() {
@@ -120,6 +101,7 @@ async function onPetClick() {
   if (MissionPool.inCooldown()) {
     renderPet();
     CooldownView.render(els.card);
+    refreshOverlay();
     return;
   }
   offerCard();
@@ -129,6 +111,7 @@ function offerCard() {
   const mission = MissionPool.offerMission();
   if (!mission) {
     els.card.innerHTML = '<div class="card empty">지금은 카드가 없어요…</div>';
+    refreshOverlay();
     return;
   }
   const canDecline = (Storage.get().session.declinesThisCycle || 0) < 1;
@@ -139,6 +122,7 @@ function offerCard() {
     onPickPhoto: handleComplete,
     onStartTimer: handleStartTimer
   });
+  refreshOverlay();
 }
 
 async function handleComplete(mission) {
@@ -152,6 +136,7 @@ async function handleComplete(mission) {
   celebrate();
   chime();
   els.card.innerHTML = '';
+  refreshOverlay();
   renderPet();
   if (result.completedPet) {
     setTimeout(() => {
@@ -179,9 +164,11 @@ function handleStartTimer(mission) {
     onCancel: () => {
       els.card.innerHTML = '';
       MissionPool.clearPending();
+      refreshOverlay();
       els.hint.textContent = '괜찮아요, 다음에 다시 만나요';
     }
   });
+  refreshOverlay();
 }
 
 function celebrate() {
@@ -192,17 +179,34 @@ function celebrate() {
   img.classList.add('celebrate');
 }
 
+const COMPACT_SIZE = { w: 320, h: 420 };
+const PANEL_SIZE = { w: 420, h: 580 };
+
+function expandWindow() {
+  window.spiritAPI.resize(PANEL_SIZE.w, PANEL_SIZE.h);
+}
+function shrinkWindow() {
+  window.spiritAPI.resize(COMPACT_SIZE.w, COMPACT_SIZE.h);
+}
+
+function refreshOverlay() {
+  const hasCard = !!els.card.firstElementChild;
+  const hasPanel = !!els.panel.firstElementChild;
+  els.app.classList.toggle('has-overlay', hasCard || hasPanel);
+}
+
 function toggleCollection() {
   if (panelOpen) {
-    els.panel.innerHTML = '';
-    panelOpen = false;
+    closePanel();
     return;
   }
   panelOpen = true;
+  expandWindow();
   CollectionView.render(els.panel, {
     onClose: closePanel,
     onSelect: () => {}
   });
+  refreshOverlay();
 }
 
 function toggleSettings() {
@@ -211,12 +215,16 @@ function toggleSettings() {
     return;
   }
   panelOpen = true;
+  expandWindow();
   SettingsPanel.render(els.panel, { onClose: closePanel });
+  refreshOverlay();
 }
 
 function closePanel() {
   els.panel.innerHTML = '';
   panelOpen = false;
+  shrinkWindow();
+  refreshOverlay();
 }
 
 function getPetDef(type) {
@@ -235,17 +243,14 @@ function startCooldownTicker() {
   cooldownTicker = setInterval(() => {
     if (panelOpen) return;
     const cd = MissionPool.inCooldown();
-    if (cd) {
-      const slot = els.card.firstElementChild;
-      if (slot && slot.classList.contains('cooldown-card')) {
-        CooldownView.render(els.card);
-      }
-    } else {
-      const slot = els.card.firstElementChild;
-      if (slot && slot.classList.contains('cooldown-card')) {
-        els.card.innerHTML = '';
-        els.hint.textContent = '쉬는 시간이 끝났어요. 정령을 다시 만나보세요';
-      }
+    const slot = els.card.firstElementChild;
+    const showingCooldown = slot && slot.classList.contains('cooldown-card');
+    if (cd && showingCooldown) {
+      CooldownView.updateTime(els.card);
+    } else if (!cd && showingCooldown) {
+      els.card.innerHTML = '';
+      refreshOverlay();
+      els.hint.textContent = '쉬는 시간이 끝났어요. 정령을 다시 만나보세요';
     }
     if (cd !== lastCooldownState) {
       renderPet();
