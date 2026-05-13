@@ -132,14 +132,13 @@ ipcMain.on('window:resize', (_event, { width, height }) => {
   if (!mainWindow) return;
   const [x, y] = mainWindow.getPosition();
   const [oldW, oldH] = mainWindow.getSize();
-  const newX = x + oldW - width;
-  const newY = y + oldH - height;
-  mainWindow.setBounds({
-    x: Math.max(0, newX),
-    y: Math.max(0, newY),
-    width,
-    height
-  }, true);
+  const display = require('electron').screen.getDisplayMatching({ x, y, width: oldW, height: oldH });
+  const work = display.workArea;
+  let newX = x + oldW - width;
+  let newY = y + oldH - height;
+  newX = Math.max(work.x, Math.min(newX, work.x + work.width - width));
+  newY = Math.max(work.y, Math.min(newY, work.y + work.height - height));
+  mainWindow.setBounds({ x: newX, y: newY, width, height }, true);
 });
 
 ipcMain.on('window:quit', () => { app.isQuiting = true; app.quit(); });
