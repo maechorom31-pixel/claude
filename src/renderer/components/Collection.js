@@ -71,7 +71,7 @@ async function openMemo(area, slot) {
   const btn = area.querySelector('.memo-add');
   const list = area.querySelector('.memo-list');
   function add() {
-    const v = input.value.trim();
+    const v = input.value.trim().slice(0, 80);
     if (!v) return;
     patch(st => {
       const e = st.collection.find(c => c.type === slot.def.type && c.completedAt === slot.entry.completedAt);

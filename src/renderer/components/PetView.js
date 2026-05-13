@@ -6,11 +6,15 @@ function petAssetPath(type, stage) {
   return `pets/${type}/stage${Math.min(4, Math.max(1, stage + 1))}.svg`;
 }
 
-function render(container) {
+function render(container, opts = {}) {
   const pet = getCurrent();
   container.innerHTML = '';
   if (!pet) {
-    container.innerHTML = '<div class="pet-empty">새 정령이 안개 속에서 다가오는 중…</div>';
+    if (opts.allCollected) {
+      container.innerHTML = '<div class="pet-empty">모든 정령과 함께한 한 시기가 지나갔어요.<br/>책장을 천천히 열어보세요.</div>';
+    } else {
+      container.innerHTML = '<div class="pet-empty">새 정령이 안개 속에서 다가오는 중…</div>';
+    }
     return;
   }
   const mood = computeMood();

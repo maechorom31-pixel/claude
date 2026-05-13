@@ -60,10 +60,13 @@ function maybeShowIntro() {
 }
 
 function renderPet() {
-  PetView.render(els.stage);
   const pet = Pet.getCurrent();
+  const allCollected = !pet && Unlock.isSeason1Complete() && allSeason2Done();
+  PetView.render(els.stage, { allCollected });
   if (!pet) {
-    els.hint.textContent = '안개 너머에서 정령이 다가오는 중…';
+    els.hint.textContent = allCollected
+      ? '컬렉션 ❉ 에서 정령들과 다시 만나보세요'
+      : '안개 너머에서 정령이 다가오는 중…';
   } else if (!pet.revealed) {
     els.hint.textContent = '클릭하면 첫 만남이 시작됩니다';
   } else {
@@ -73,20 +76,31 @@ function renderPet() {
   }
 }
 
+function allSeason2Done() {
+  if (!petsConfig) return false;
+  const required = petsConfig.season2.map(p => p.type);
+  const have = new Set(Storage.get().collection.map(c => c.type));
+  return required.every(t => have.has(t));
+}
+
 function bindEvents() {
   els.stage.addEventListener('click', onPetClick);
   els.btnCollection.addEventListener('click', toggleCollection);
   els.btnSettings.addEventListener('click', toggleSettings);
   els.btnHide.addEventListener('click', () => window.spiritAPI.hide());
   els.btnQuit.addEventListener('click', () => window.spiritAPI.quit());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && panelOpen) closePanel();
+  });
 }
 
 async function onPetClick() {
   if (panelOpen) return;
   const pet = Pet.getCurrent();
   if (!pet) {
-    Pet.summonNewPet();
+    const summoned = Pet.summonNewPet();
     renderPet();
+    if (!summoned) toggleCollection();
     return;
   }
   if (!pet.revealed) {
@@ -137,14 +151,14 @@ async function handleComplete(mission) {
   chime();
   els.card.innerHTML = '';
   refreshOverlay();
-  renderPet();
   if (result.completedPet) {
+    els.hint.textContent = '정령이 책장으로 자리잡았어요';
     setTimeout(() => {
-      els.hint.textContent = '정령이 책장으로 자리잡았어요';
       Pet.summonNewPet();
       renderPet();
     }, 1400);
   } else {
+    setTimeout(() => renderPet(), 700);
     els.hint.textContent = '잘 쉬었어요. 60분 후에 다시 만나요';
   }
 }
