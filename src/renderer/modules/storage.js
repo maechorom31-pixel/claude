@@ -24,6 +24,7 @@ const DEFAULT_STATE = {
     opacity: 0.92,
     soundOn: false
   },
+  firstRunDone: false,
   session: {
     recentMissionIds: [],
     lastMissionCompletedAt: null,

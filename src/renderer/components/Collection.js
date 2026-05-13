@@ -1,5 +1,6 @@
 import { getSlots } from '../modules/collection.js';
 import { renderGallery } from './PhotoUpload.js';
+import { get, patch } from '../modules/storage.js';
 
 function petAssetPath(type, stage = 4) {
   return `pets/${type}/stage${stage}.svg`;
@@ -52,14 +53,44 @@ function render(container, { onClose, onSelect }) {
 }
 
 async function openMemo(area, slot) {
+  const memos = (slot.entry.memos || []);
   area.innerHTML = `
     <div class="memo">
       <div class="memo-title">${slot.def.name}</div>
       <div class="memo-line">${slot.def.tagline}</div>
       <div class="memo-photos"></div>
+      <div class="memo-list">${memos.map(m => `<div class="memo-item">${escapeHtml(m)}</div>`).join('')}</div>
+      <div class="memo-input-row">
+        <input class="memo-input" placeholder="이 시기의 한 줄을 남겨두기" maxlength="80"/>
+        <button class="ghost memo-add">남기기</button>
+      </div>
     </div>
   `;
   await renderGallery(area.querySelector('.memo-photos'), slot.entry.photos);
+  const input = area.querySelector('.memo-input');
+  const btn = area.querySelector('.memo-add');
+  const list = area.querySelector('.memo-list');
+  function add() {
+    const v = input.value.trim();
+    if (!v) return;
+    patch(st => {
+      const e = st.collection.find(c => c.type === slot.def.type && c.completedAt === slot.entry.completedAt);
+      if (e) e.memos = [...(e.memos || []), v];
+    });
+    const item = document.createElement('div');
+    item.className = 'memo-item';
+    item.textContent = v;
+    list.appendChild(item);
+    input.value = '';
+  }
+  btn.onclick = add;
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
 }
 
 export { render };

@@ -1,10 +1,16 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { buildWindowOptions } = require('./windowConfig');
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
+let tray = null;
+
+function resolveAssetPath(...parts) {
+  if (isDev) return path.join(__dirname, '..', '..', 'assets', ...parts);
+  return path.join(process.resourcesPath, 'assets', ...parts);
+}
 
 function userDataPath(...parts) {
   return path.join(app.getPath('userData'), ...parts);
@@ -26,7 +32,9 @@ function resolveDataFile(name) {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow(buildWindowOptions());
+  const opts = buildWindowOptions();
+  opts.icon = resolveAssetPath('icons', 'app.png');
+  mainWindow = new BrowserWindow(opts);
   mainWindow.setAlwaysOnTop(true, 'floating');
 
   if (isDev) {
@@ -35,7 +43,38 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'renderer', 'index.html'));
   }
 
+  mainWindow.on('close', (e) => {
+    if (!app.isQuiting) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
+}
+
+function createTray() {
+  const iconPath = resolveAssetPath('icons', 'tray.png');
+  const image = nativeImage.createFromPath(iconPath);
+  tray = new Tray(image);
+  tray.setToolTip('작은 정령들');
+  const menu = Menu.buildFromTemplate([
+    { label: '정령 보기', click: () => showWindow() },
+    { label: '잠시 숨기기', click: () => mainWindow && mainWindow.hide() },
+    { type: 'separator' },
+    { label: '종료', click: () => { app.isQuiting = true; app.quit(); } }
+  ]);
+  tray.setContextMenu(menu);
+  tray.on('click', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isVisible()) mainWindow.hide();
+    else showWindow();
+  });
+}
+
+function showWindow() {
+  if (!mainWindow) return;
+  mainWindow.show();
+  mainWindow.setAlwaysOnTop(true, 'floating');
 }
 
 ipcMain.handle('state:load', async () => {
@@ -95,14 +134,18 @@ ipcMain.on('window:setOpacity', (_event, value) => {
   mainWindow.setOpacity(Math.max(0.3, Math.min(1, value)));
 });
 
-ipcMain.on('window:quit', () => app.quit());
+ipcMain.on('window:quit', () => { app.isQuiting = true; app.quit(); });
+ipcMain.on('window:hide', () => { if (mainWindow) mainWindow.hide(); });
 
 function formatTimestamp(d) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  createTray();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

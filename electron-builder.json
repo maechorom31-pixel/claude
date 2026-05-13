@@ -22,9 +22,16 @@
     }
   ],
   "win": {
+    "icon": "assets/icons/app.png",
     "target": [
       { "target": "nsis", "arch": ["x64"] }
     ]
+  },
+  "linux": {
+    "icon": "assets/icons/app.png"
+  },
+  "mac": {
+    "icon": "assets/icons/app.png"
   },
   "nsis": {
     "oneClick": false,

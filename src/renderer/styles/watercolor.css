@@ -84,6 +84,43 @@
     drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
 }
 
+.pet-view.sleeping .pet-img {
+  filter:
+    url(#watercolor-soft)
+    saturate(0.78) brightness(0.96)
+    drop-shadow(0 2px 4px rgba(140, 100, 70, 0.10));
+  animation-duration: 9s;
+  opacity: 0.92;
+}
+
+.pet-view .pet-zz {
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  display: flex;
+  gap: 2px;
+  font-family: serif;
+  font-style: italic;
+  color: #7a6da0;
+  z-index: 4;
+  pointer-events: none;
+}
+.pet-view .pet-zz span {
+  display: inline-block;
+  animation: zfloat 3.4s ease-in-out infinite;
+  opacity: 0;
+}
+.pet-view .pet-zz span:nth-child(1) { font-size: 12px; animation-delay: 0s; }
+.pet-view .pet-zz span:nth-child(2) { font-size: 15px; animation-delay: 0.4s; }
+.pet-view .pet-zz span:nth-child(3) { font-size: 18px; animation-delay: 0.8s; }
+
+@keyframes zfloat {
+  0%   { transform: translateY(8px) translateX(0); opacity: 0; }
+  20%  { opacity: 0.85; }
+  60%  { transform: translateY(-10px) translateX(-4px); opacity: 0.85; }
+  100% { transform: translateY(-22px) translateX(-10px); opacity: 0; }
+}
+
 .pet-view .pet-img.celebrate {
   animation: celebrate 900ms ease;
 }

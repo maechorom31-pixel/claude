@@ -11,6 +11,8 @@ import * as MissionCard from './components/MissionCard.js';
 import * as Timer from './components/Timer.js';
 import * as CooldownView from './components/CooldownView.js';
 import * as CollectionView from './components/Collection.js';
+import * as SettingsPanel from './components/SettingsPanel.js';
+import { chime } from './modules/sound.js';
 
 const els = {};
 let petsConfig = null;
@@ -25,6 +27,8 @@ async function boot() {
   els.panel = document.getElementById('panel-slot');
   els.dragHandle = document.getElementById('drag-handle');
   els.btnCollection = document.getElementById('open-collection');
+  els.btnSettings = document.getElementById('open-settings');
+  els.btnHide = document.getElementById('hide-window');
   els.btnQuit = document.getElementById('quit');
 
   await Storage.load();
@@ -41,6 +45,19 @@ async function boot() {
   renderPet();
   bindEvents();
   startCooldownTicker();
+  applyOpacityFromState();
+  maybeShowIntro();
+}
+
+function applyOpacityFromState() {
+  const v = Storage.get().settings.opacity;
+  if (typeof v === 'number') window.spiritAPI.setOpacity(v);
+}
+
+function maybeShowIntro() {
+  if (Storage.get().firstRunDone) return;
+  els.hint.innerHTML = '<span class="intro">정령을 살짝 클릭해보세요 ↑</span>';
+  Storage.patch(st => { st.firstRunDone = true; });
 }
 
 function renderPet() {
@@ -60,6 +77,8 @@ function renderPet() {
 function bindEvents() {
   els.stage.addEventListener('click', onPetClick);
   els.btnCollection.addEventListener('click', toggleCollection);
+  els.btnSettings.addEventListener('click', toggleSettings);
+  els.btnHide.addEventListener('click', () => window.spiritAPI.hide());
   els.btnQuit.addEventListener('click', () => window.spiritAPI.quit());
   setupDrag();
 }
@@ -131,6 +150,7 @@ async function handleComplete(mission) {
     return;
   }
   celebrate();
+  chime();
   els.card.innerHTML = '';
   renderPet();
   if (result.completedPet) {
@@ -180,9 +200,23 @@ function toggleCollection() {
   }
   panelOpen = true;
   CollectionView.render(els.panel, {
-    onClose: toggleCollection,
+    onClose: closePanel,
     onSelect: () => {}
   });
+}
+
+function toggleSettings() {
+  if (panelOpen) {
+    closePanel();
+    return;
+  }
+  panelOpen = true;
+  SettingsPanel.render(els.panel, { onClose: closePanel });
+}
+
+function closePanel() {
+  els.panel.innerHTML = '';
+  panelOpen = false;
 }
 
 function getPetDef(type) {
@@ -195,10 +229,13 @@ function getPetDef(type) {
   return all.find(p => p.type === type) || { name: '정령' };
 }
 
+let lastCooldownState = false;
 function startCooldownTicker() {
+  lastCooldownState = MissionPool.inCooldown();
   cooldownTicker = setInterval(() => {
     if (panelOpen) return;
-    if (MissionPool.inCooldown()) {
+    const cd = MissionPool.inCooldown();
+    if (cd) {
       const slot = els.card.firstElementChild;
       if (slot && slot.classList.contains('cooldown-card')) {
         CooldownView.render(els.card);
@@ -209,6 +246,10 @@ function startCooldownTicker() {
         els.card.innerHTML = '';
         els.hint.textContent = '쉬는 시간이 끝났어요. 정령을 다시 만나보세요';
       }
+    }
+    if (cd !== lastCooldownState) {
+      renderPet();
+      lastCooldownState = cd;
     }
   }, 1000);
 }
