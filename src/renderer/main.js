@@ -194,7 +194,7 @@ function celebrate() {
 }
 
 const COMPACT_SIZE = { w: 320, h: 420 };
-const PANEL_SIZE = { w: 460, h: 720 };
+const PANEL_SIZE = { w: 540, h: 780 };
 
 function expandWindow() {
   window.spiritAPI.resize(PANEL_SIZE.w, PANEL_SIZE.h);

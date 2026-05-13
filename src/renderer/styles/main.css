@@ -212,42 +212,47 @@ button.ghost:hover { background: rgba(200, 180, 160, 0.18); }
 .tray-btn:hover { background: rgba(220, 200, 180, 0.85); }
 
 .panel {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
   background: rgba(252, 247, 240, 0.98);
   border-radius: 18px;
   border: 1px solid rgba(190, 168, 142, 0.5);
-  padding: 14px;
+  padding: 18px 20px;
   overflow-y: auto;
   z-index: 10;
+  box-shadow: 0 8px 30px rgba(120, 90, 70, 0.18);
 }
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(190, 168, 142, 0.3);
 }
 .panel-header .title {
-  font-size: 18px;
+  font-size: 20px;
   color: #4a3a2a;
 }
-.shelves { display: flex; flex-direction: column; gap: 12px; }
-.shelf { padding-bottom: 10px; border-bottom: 1px dashed rgba(160, 140, 120, 0.3); }
-.shelf-label { font-size: 12px; color: #a08a72; margin-bottom: 6px; }
-.shelf-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.shelves { display: flex; flex-direction: column; gap: 18px; }
+.shelf { padding-bottom: 14px; border-bottom: 1px dashed rgba(160, 140, 120, 0.3); }
+.shelf-label { font-size: 13px; color: #a08a72; margin-bottom: 10px; }
+.shelf-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .slot {
   aspect-ratio: 1;
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(240, 230, 220, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   border: 1px solid rgba(190, 170, 150, 0.3);
+  transition: transform 160ms ease, background 160ms ease;
 }
+.slot.filled:hover { background: rgba(255, 250, 244, 1); transform: translateY(-2px); }
 .slot.empty .slot-placeholder {
   width: 60%;
   height: 60%;
