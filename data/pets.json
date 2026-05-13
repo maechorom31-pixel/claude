@@ -1,0 +1,119 @@
+{
+  "season1": {
+    "common": [
+      {
+        "type": "cloud_spirit",
+        "name": "구름 정령",
+        "tagline": "하늘과 호흡을 닮은 부드러운 친구",
+        "stageNames": ["옅은 안개", "작은 구름 형체", "또렷한 구름", "표정 있는 큰 구름"],
+        "unlock": { "kind": "starter" }
+      },
+      {
+        "type": "teacup_spirit",
+        "name": "찻잔 정령",
+        "tagline": "따뜻한 김이 올라오는 작은 도자기",
+        "stageNames": ["빈 잔에 김만", "잔이 또렷해짐", "김이 풍성해짐", "차 속에 작은 얼굴"],
+        "unlock": { "kind": "starter" }
+      },
+      {
+        "type": "book_spirit",
+        "name": "책 정령",
+        "tagline": "펄럭이는 책장을 가진 작은 존재",
+        "stageNames": ["표지만 보임", "책장이 펄럭임", "두꺼워짐", "글자가 빛처럼 새어나옴"],
+        "unlock": { "kind": "starter" }
+      },
+      {
+        "type": "plant_spirit",
+        "name": "화분 정령",
+        "tagline": "흙과 작은 잎이 깃든 정령",
+        "stageNames": ["흙 속 씨앗", "새싹", "잎이 무성해짐", "작은 꽃이 핌"],
+        "unlock": { "kind": "starter" }
+      },
+      {
+        "type": "lantern_spirit",
+        "name": "등불 정령",
+        "tagline": "밤의 조용한 빛을 머금은 존재",
+        "stageNames": ["작은 불꽃", "초롱 형체", "따뜻한 빛이 번짐", "빛 속의 작은 얼굴"],
+        "unlock": { "kind": "starter" }
+      }
+    ],
+    "special": [
+      {
+        "type": "poem_spirit",
+        "name": "시의 정령",
+        "tagline": "시 한 편이 정령 둘레에 떠 있음",
+        "stageNames": ["흩어진 글자", "한 줄이 됨", "짧은 행", "시 한 편을 두름"],
+        "unlock": { "kind": "stat", "stat": "poemsRead", "threshold": 12 }
+      },
+      {
+        "type": "music_spirit",
+        "name": "음악의 정령",
+        "tagline": "작은 노래가 흐름",
+        "stageNames": ["한 음표", "짧은 마디", "멜로디가 떠다님", "작은 노래"],
+        "unlock": { "kind": "stat", "stat": "songsListened", "threshold": 25 }
+      },
+      {
+        "type": "sunlight_spirit",
+        "name": "햇볕 정령",
+        "tagline": "작은 태양 같은 얼굴",
+        "stageNames": ["옅은 햇살 한 가닥", "빛 줄기들", "따뜻한 광채", "작은 태양"],
+        "unlock": { "kind": "stat", "stat": "daylightOutdoorCount", "threshold": 6 }
+      },
+      {
+        "type": "sunset_spirit",
+        "name": "노을 정령",
+        "tagline": "한 폭의 노을 풍경 안의 정령",
+        "stageNames": ["옅은 주홍 번짐", "형체가 잡힘", "노을빛이 짙어짐", "한 폭의 노을"],
+        "unlock": { "kind": "stat", "stat": "sunsetMeets", "threshold": 5 }
+      },
+      {
+        "type": "star_spirit",
+        "name": "별의 정령",
+        "tagline": "작은 별자리를 두른 정령",
+        "stageNames": ["작은 빛 한 점", "별 모양", "별빛이 흩뿌려짐", "별자리를 두름"],
+        "unlock": { "kind": "stat", "stat": "nightMeets", "threshold": 4 }
+      }
+    ]
+  },
+  "season2": [
+    {
+      "type": "sleep_spirit",
+      "name": "잠 정령",
+      "tagline": "충분한 휴식 사이클을 거친 이에게",
+      "stageNames": ["흐릿한 윤곽", "꿈결 같은 형체", "또렷한 잠의 결", "작은 자장 속"],
+      "unlock": { "kind": "stat", "stat": "totalMissionsCompleted", "threshold": 80 }
+    },
+    {
+      "type": "echo_spirit",
+      "name": "메아리 정령",
+      "tagline": "같은 결을 반복한 이에게",
+      "stageNames": ["희미한 메아리", "겹쳐지는 결", "또렷한 울림", "작은 합창"],
+      "unlock": { "kind": "categoryRepeat", "threshold": 20 }
+    },
+    {
+      "type": "empty_chair_spirit",
+      "name": "빈 의자 정령",
+      "tagline": "무위의 시간을 자주 가진 이에게",
+      "stageNames": ["빈 의자만", "그림자 어림", "정령이 앉음", "햇살이 의자에"],
+      "unlock": { "kind": "category", "category": "doing_nothing", "threshold": 12 }
+    },
+    {
+      "type": "paperboat_spirit",
+      "name": "종이배 정령",
+      "tagline": "사진을 자주 띄운 이에게",
+      "stageNames": ["접힌 종이", "종이배 형체", "물결 위를 떠감", "작은 항해"],
+      "unlock": { "kind": "photos", "threshold": 10 }
+    },
+    {
+      "type": "scent_spirit",
+      "name": "향기 정령",
+      "tagline": "감각을 자주 깨운 이에게",
+      "stageNames": ["옅은 향 한 가닥", "흐름이 생김", "향기가 짙어짐", "향기 속의 작은 얼굴"],
+      "unlock": { "kind": "category", "category": "sensing", "threshold": 15 }
+    }
+  ],
+  "growth": {
+    "stagesTotal": 4,
+    "pointsPerStage": [0, 13, 25, 38, 50]
+  }
+}

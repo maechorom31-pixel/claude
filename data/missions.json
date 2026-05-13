@@ -1,0 +1,53 @@
+[
+  { "id": "m_001", "category": "sensing", "title": "창밖을 멍하니 바라보기", "verify": "self", "duration": 0 },
+  { "id": "m_002", "category": "sensing", "title": "하늘 사진 한 장 찍어 보내기", "verify": "photo", "duration": 0, "timeOfDay": "day" },
+  { "id": "m_003", "category": "sensing", "title": "좋은 향기 한 번 맡기", "verify": "self", "duration": 0, "tags": ["scent"] },
+  { "id": "m_004", "category": "sensing", "title": "손에 찬물 적셔 보기", "verify": "self", "duration": 0 },
+  { "id": "m_005", "category": "sensing", "title": "지금 들리는 소리 세 가지 헤아리기", "verify": "self", "duration": 0 },
+
+  { "id": "m_010", "category": "stillness", "title": "깊은 호흡 다섯 번", "verify": "timer", "duration": 60 },
+  { "id": "m_011", "category": "stillness", "title": "1분 눈 감고 있기", "verify": "timer", "duration": 60 },
+  { "id": "m_012", "category": "stillness", "title": "차 한 잔 천천히 우리기", "verify": "timer", "duration": 180 },
+  { "id": "m_013", "category": "stillness", "title": "어깨를 가만히 떨구기", "verify": "self", "duration": 0 },
+  { "id": "m_014", "category": "stillness", "title": "두 손을 모아 한 호흡", "verify": "self", "duration": 0 },
+
+  { "id": "m_020", "category": "literature_music", "title": "시 한 편 천천히 읽기", "verify": "self", "duration": 0, "statBonus": "poemsRead" },
+  { "id": "m_021", "category": "literature_music", "title": "노래 한 곡 처음부터 끝까지 듣기", "verify": "timer", "duration": 210, "statBonus": "songsListened" },
+  { "id": "m_022", "category": "literature_music", "title": "좋아하는 글귀 한 줄 필사", "verify": "self", "duration": 0 },
+  { "id": "m_023", "category": "literature_music", "title": "책 한 페이지 무작위로 펼치기", "verify": "self", "duration": 0 },
+  { "id": "m_024", "category": "literature_music", "title": "오래된 노래 한 곡 다시 듣기", "verify": "timer", "duration": 210, "statBonus": "songsListened" },
+
+  { "id": "m_030", "category": "body", "title": "일어나 2분 걷기", "verify": "timer", "duration": 120 },
+  { "id": "m_031", "category": "body", "title": "햇볕 잠깐 쬐기", "verify": "self", "duration": 0, "timeOfDay": "day", "statBonus": "daylightOutdoorCount" },
+  { "id": "m_032", "category": "body", "title": "손목과 목 스트레칭", "verify": "self", "duration": 0 },
+  { "id": "m_033", "category": "body", "title": "창문 열고 깊게 공기 들이마시기", "verify": "self", "duration": 0 },
+  { "id": "m_034", "category": "body", "title": "발끝까지 천천히 기지개", "verify": "self", "duration": 0 },
+
+  { "id": "m_040", "category": "creation", "title": "종이에 낙서 한 줄", "verify": "self", "duration": 0 },
+  { "id": "m_041", "category": "creation", "title": "지금 떠오르는 단어 세 개 메모", "verify": "self", "duration": 0 },
+  { "id": "m_042", "category": "creation", "title": "오늘 좋았던 순간 한 줄 적기", "verify": "self", "duration": 0 },
+  { "id": "m_043", "category": "creation", "title": "보이는 풍경 한 장면 사진으로 남기기", "verify": "photo", "duration": 0 },
+  { "id": "m_044", "category": "creation", "title": "내 손을 한 번 그려보기", "verify": "self", "duration": 0 },
+
+  { "id": "m_050", "category": "connection", "title": "가족이나 친구에게 안부 한 줄", "verify": "self", "duration": 0 },
+  { "id": "m_051", "category": "connection", "title": "좋아하는 사람 사진 한 번 보기", "verify": "self", "duration": 0 },
+  { "id": "m_052", "category": "connection", "title": "고마운 사람 떠올리기", "verify": "self", "duration": 0 },
+
+  { "id": "m_060", "category": "doing_nothing", "title": "1분 멍 때리기", "verify": "timer", "duration": 60 },
+  { "id": "m_061", "category": "doing_nothing", "title": "책상에 엎드려 3분 가만히", "verify": "timer", "duration": 180 },
+  { "id": "m_062", "category": "doing_nothing", "title": "의자에 등 기대고 천장 보기", "verify": "self", "duration": 0 },
+  { "id": "m_063", "category": "doing_nothing", "title": "아무것도 하지 않는 2분", "verify": "timer", "duration": 120 },
+
+  { "id": "m_070", "category": "useless_play", "title": "펜 한 번 돌려보기", "verify": "self", "duration": 0 },
+  { "id": "m_071", "category": "useless_play", "title": "책상에 손가락으로 리듬", "verify": "self", "duration": 0 },
+  { "id": "m_072", "category": "useless_play", "title": "종이 한 장 접어보기", "verify": "self", "duration": 0 },
+  { "id": "m_073", "category": "useless_play", "title": "지우개 끝으로 작은 그림", "verify": "self", "duration": 0 },
+
+  { "id": "m_080", "category": "visual_pause", "title": "한 사물 1분 응시", "verify": "timer", "duration": 60 },
+  { "id": "m_081", "category": "visual_pause", "title": "주변에서 색깔 다섯 가지 찾기", "verify": "self", "duration": 0 },
+  { "id": "m_082", "category": "visual_pause", "title": "천장의 무늬 관찰", "verify": "self", "duration": 0 },
+  { "id": "m_083", "category": "visual_pause", "title": "창문 너머 가장 먼 사물 보기", "verify": "self", "duration": 0 },
+
+  { "id": "m_090", "category": "sensing", "title": "노을 한 번 바라보기", "verify": "photo", "duration": 0, "timeOfDay": "sunset", "statBonus": "sunsetMeets" },
+  { "id": "m_091", "category": "stillness", "title": "별 하나 찾아 한 호흡", "verify": "self", "duration": 0, "timeOfDay": "night", "statBonus": "nightMeets" }
+]

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <g>
+    <ellipse cx="100" cy="120" rx="58" ry="34" fill="#e0d2f0" opacity="0.7"/>
+    <text x="56" y="106" font-family="serif" font-size="12" fill="#4a2c68" letter-spacing="2">바람이 잠시</text>
+    <text x="56" y="124" font-family="serif" font-size="12" fill="#4a2c68" letter-spacing="2">멈춘 자리에</text>
+    <text x="56" y="142" font-family="serif" font-size="12" fill="#4a2c68" letter-spacing="2">너의 호흡이</text>
+  </g>
+</svg>

@@ -1,0 +1,34 @@
+{
+  "appId": "com.spirits.rest-companion",
+  "productName": "작은 정령들",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "src/main/**/*",
+    "dist/renderer/**/*",
+    "data/**/*",
+    "assets/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "data",
+      "to": "data"
+    },
+    {
+      "from": "assets",
+      "to": "assets"
+    }
+  ],
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}

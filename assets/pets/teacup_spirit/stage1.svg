@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <g opacity="0.55">
+    <path d="M82 138 Q82 162 100 162 Q118 162 118 138 Z" fill="#e9dcc6" stroke="#bca782" stroke-width="1.4"/>
+    <path d="M92 110 Q88 96 96 90 M104 110 Q108 96 100 88" stroke="#cdd5dc" stroke-width="2" fill="none" opacity="0.6"/>
+  </g>
+</svg>

@@ -1,0 +1,80 @@
+.pet-view {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pet-view .pet-aura {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 245, 230, 0.45), rgba(255, 245, 230, 0) 70%);
+  filter: blur(8px);
+  z-index: 0;
+}
+
+.pet-view .pet-img {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+  z-index: 1;
+  filter: drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+  transition: filter 400ms ease, opacity 400ms ease, transform 400ms ease;
+  animation: gentleBob 6s ease-in-out infinite;
+}
+
+@keyframes gentleBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.pet-view .pet-cheek {
+  position: absolute;
+  bottom: -2px;
+  font-size: 11px;
+  color: #9b8670;
+  text-align: center;
+  width: 100%;
+}
+
+.pet-view.unrevealed .pet-img {
+  filter: blur(6px) opacity(0.55);
+}
+
+.pet-view.mood-wilted1 .pet-img {
+  filter: saturate(0.7) brightness(0.95) drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+}
+.pet-view.mood-wilted2 .pet-img {
+  filter: saturate(0.45) brightness(0.85) drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+  animation-duration: 9s;
+}
+.pet-view.mood-recovering .pet-img {
+  filter: saturate(0.85) drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+}
+
+.pet-view .pet-img.celebrate {
+  animation: celebrate 900ms ease;
+}
+
+@keyframes celebrate {
+  0%   { transform: scale(1) rotate(0); }
+  30%  { transform: scale(1.08) rotate(-3deg); }
+  60%  { transform: scale(1.05) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.pet-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(2px 2px at 30% 40%, rgba(255, 200, 160, 0.4), transparent 60%),
+    radial-gradient(2px 2px at 70% 60%, rgba(200, 220, 240, 0.35), transparent 60%);
+  pointer-events: none;
+  z-index: 2;
+}
