@@ -91,6 +91,10 @@ function bindEvents() {
   els.btnQuit.addEventListener('click', () => window.spiritAPI.quit());
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && panelOpen) closePanel();
+    armIdleTimer();
+  });
+  ['mousemove', 'click', 'wheel', 'input'].forEach(type => {
+    document.addEventListener(type, () => armIdleTimer());
   });
 }
 
@@ -209,6 +213,20 @@ function refreshOverlay() {
   els.app.classList.toggle('has-overlay', hasCard || hasPanel);
 }
 
+const PANEL_IDLE_MS = 3000;
+let panelIdleTimer = null;
+function armIdleTimer() {
+  clearTimeout(panelIdleTimer);
+  if (!panelOpen) return;
+  panelIdleTimer = setTimeout(() => {
+    if (panelOpen) closePanel();
+  }, PANEL_IDLE_MS);
+}
+function disarmIdleTimer() {
+  clearTimeout(panelIdleTimer);
+  panelIdleTimer = null;
+}
+
 function toggleCollection() {
   if (panelOpen) {
     closePanel();
@@ -221,6 +239,7 @@ function toggleCollection() {
     onSelect: () => {}
   });
   refreshOverlay();
+  armIdleTimer();
 }
 
 function toggleSettings() {
@@ -232,6 +251,7 @@ function toggleSettings() {
   expandWindow();
   SettingsPanel.render(els.panel, { onClose: closePanel });
   refreshOverlay();
+  armIdleTimer();
 }
 
 function closePanel() {
@@ -239,6 +259,7 @@ function closePanel() {
   panelOpen = false;
   shrinkWindow();
   refreshOverlay();
+  disarmIdleTimer();
 }
 
 function getPetDef(type) {
