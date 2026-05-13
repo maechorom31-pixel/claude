@@ -9,6 +9,5 @@ contextBridge.exposeInMainWorld('spiritAPI', {
   readPhoto: (filename) => ipcRenderer.invoke('photo:read', filename),
   setOpacity: (v) => ipcRenderer.send('window:setOpacity', v),
   resize: (width, height) => ipcRenderer.send('window:resize', { width, height }),
-  hide: () => ipcRenderer.send('window:hide'),
   quit: () => ipcRenderer.send('window:quit')
 });

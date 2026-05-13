@@ -1,11 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { buildWindowOptions } = require('./windowConfig');
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
-let tray = null;
 
 function resolveAssetPath(...parts) {
   if (isDev) return path.join(__dirname, '..', '..', 'assets', ...parts);
@@ -43,38 +42,7 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'renderer', 'index.html'));
   }
 
-  mainWindow.on('close', (e) => {
-    if (!app.isQuiting) {
-      e.preventDefault();
-      mainWindow.hide();
-    }
-  });
   mainWindow.on('closed', () => { mainWindow = null; });
-}
-
-function createTray() {
-  const iconPath = resolveAssetPath('icons', 'tray.png');
-  const image = nativeImage.createFromPath(iconPath);
-  tray = new Tray(image);
-  tray.setToolTip('작은 정령들');
-  const menu = Menu.buildFromTemplate([
-    { label: '정령 보기', click: () => showWindow() },
-    { label: '잠시 숨기기', click: () => mainWindow && mainWindow.hide() },
-    { type: 'separator' },
-    { label: '종료', click: () => { app.isQuiting = true; app.quit(); } }
-  ]);
-  tray.setContextMenu(menu);
-  tray.on('click', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isVisible()) mainWindow.hide();
-    else showWindow();
-  });
-}
-
-function showWindow() {
-  if (!mainWindow) return;
-  mainWindow.show();
-  mainWindow.setAlwaysOnTop(true, 'floating');
 }
 
 ipcMain.handle('state:load', async () => {
@@ -141,8 +109,7 @@ ipcMain.on('window:resize', (_event, { width, height }) => {
   mainWindow.setBounds({ x: newX, y: newY, width, height }, true);
 });
 
-ipcMain.on('window:quit', () => { app.isQuiting = true; app.quit(); });
-ipcMain.on('window:hide', () => { if (mainWindow) mainWindow.hide(); });
+ipcMain.on('window:quit', () => app.quit());
 
 function formatTimestamp(d) {
   const pad = (n) => String(n).padStart(2, '0');
@@ -161,7 +128,6 @@ if (!gotLock) {
   });
   app.whenReady().then(() => {
     createWindow();
-    createTray();
   });
 }
 

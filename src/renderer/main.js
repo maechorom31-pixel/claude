@@ -27,7 +27,6 @@ async function boot() {
   els.panel = document.getElementById('panel-slot');
   els.btnCollection = document.getElementById('open-collection');
   els.btnSettings = document.getElementById('open-settings');
-  els.btnHide = document.getElementById('hide-window');
   els.btnQuit = document.getElementById('quit');
 
   await Storage.load();
@@ -83,14 +82,42 @@ function allSeason2Done() {
   return required.every(t => have.has(t));
 }
 
+let escArmed = false;
+let escResetTimer = null;
+
+function handleEsc() {
+  const hasCard = !!els.card.firstElementChild;
+  if (panelOpen) {
+    closePanel();
+    escArmed = false;
+    return;
+  }
+  if (hasCard) {
+    els.card.innerHTML = '';
+    refreshOverlay();
+    escArmed = false;
+    return;
+  }
+  if (escArmed) {
+    window.spiritAPI.quit();
+    return;
+  }
+  escArmed = true;
+  els.hint.textContent = '한 번 더 Esc → 종료';
+  clearTimeout(escResetTimer);
+  escResetTimer = setTimeout(() => {
+    escArmed = false;
+    renderPet();
+  }, 2000);
+}
+
 function bindEvents() {
   els.stage.addEventListener('click', onPetClick);
   els.btnCollection.addEventListener('click', toggleCollection);
   els.btnSettings.addEventListener('click', toggleSettings);
-  els.btnHide.addEventListener('click', () => window.spiritAPI.hide());
   els.btnQuit.addEventListener('click', () => window.spiritAPI.quit());
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && panelOpen) closePanel();
+    if (e.key === 'Escape') handleEsc();
     armIdleTimer();
   });
   ['mousemove', 'click', 'wheel', 'input'].forEach(type => {
