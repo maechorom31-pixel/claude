@@ -24,8 +24,11 @@
   "win": {
     "icon": "assets/icons/app.png",
     "target": [
-      { "target": "nsis", "arch": ["x64"] }
+      { "target": "portable", "arch": ["x64"] }
     ]
+  },
+  "portable": {
+    "artifactName": "작은정령들-${version}-portable.${ext}"
   },
   "linux": {
     "icon": "assets/icons/app.png"
