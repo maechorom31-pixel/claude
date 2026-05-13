@@ -23,9 +23,27 @@
   height: 160px;
   object-fit: contain;
   z-index: 1;
-  filter: drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+  filter:
+    url(#watercolor)
+    saturate(0.92)
+    contrast(0.96)
+    drop-shadow(0 2px 4px rgba(140, 100, 70, 0.14));
   transition: filter 400ms ease, opacity 400ms ease, transform 400ms ease;
   animation: gentleBob 6s ease-in-out infinite;
+}
+
+@supports (mix-blend-mode: multiply) {
+  .pet-view::after {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 90% at 50% 40%, rgba(255, 246, 232, 0.0) 55%, rgba(180, 140, 100, 0.10) 92%);
+    mix-blend-mode: multiply;
+    z-index: 3;
+    border-radius: 50%;
+  }
 }
 
 @keyframes gentleBob {
@@ -43,18 +61,27 @@
 }
 
 .pet-view.unrevealed .pet-img {
-  filter: blur(6px) opacity(0.55);
+  filter: url(#watercolor-soft) blur(6px) opacity(0.55);
 }
 
 .pet-view.mood-wilted1 .pet-img {
-  filter: saturate(0.7) brightness(0.95) drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+  filter:
+    url(#watercolor)
+    saturate(0.62) brightness(0.95)
+    drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
 }
 .pet-view.mood-wilted2 .pet-img {
-  filter: saturate(0.45) brightness(0.85) drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+  filter:
+    url(#watercolor)
+    saturate(0.4) brightness(0.85)
+    drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
   animation-duration: 9s;
 }
 .pet-view.mood-recovering .pet-img {
-  filter: saturate(0.85) drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
+  filter:
+    url(#watercolor)
+    saturate(0.8)
+    drop-shadow(0 2px 4px rgba(140, 100, 70, 0.12));
 }
 
 .pet-view .pet-img.celebrate {

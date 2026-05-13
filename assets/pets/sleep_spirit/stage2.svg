@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <g>
+    <path d="M58 130 Q80 102 100 124 Q120 146 142 118" stroke="#a89cc8" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.85"/>
+    <ellipse cx="100" cy="128" rx="46" ry="22" fill="#d0c8e6" opacity="0.5"/>
+    <text x="120" y="80" font-family="serif" font-size="14" fill="#7a6db0" opacity="0.7">z</text>
+  </g>
+</svg>

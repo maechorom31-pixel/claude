@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="pb4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dde9f4"/>
+      <stop offset="100%" stop-color="#aabfd4"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="140" width="200" height="60" fill="url(#pb4)"/>
+  <g fill="#fff6cc">
+    <circle cx="36" cy="34" r="1.4"/>
+    <circle cx="170" cy="40" r="1.6"/>
+    <circle cx="56" cy="60" r="1.2"/>
+    <circle cx="150" cy="68" r="1.2"/>
+    <circle cx="100" cy="22" r="1.8"/>
+  </g>
+  <g stroke="#7796b4" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M10 154 Q40 148 60 154 Q80 160 100 154 Q120 148 140 154 Q160 160 190 154"/>
+    <path d="M10 168 Q40 162 60 168 Q80 174 100 168 Q120 162 140 168 Q160 174 190 168" opacity="0.7"/>
+    <path d="M10 182 Q40 176 60 182 Q80 188 100 182 Q120 176 140 182 Q160 188 190 182" opacity="0.45"/>
+  </g>
+  <g transform="translate(0 -10)">
+    <polygon points="54,128 146,128 126,154 74,154" fill="#fff8e6" stroke="#6e5836" stroke-width="2.2"/>
+    <polygon points="100,68 100,128 74,128" fill="#f1e2c2" stroke="#6e5836" stroke-width="1.8"/>
+    <polygon points="100,68 100,128 126,128" fill="#fff8e6" stroke="#6e5836" stroke-width="1.8"/>
+    <circle cx="92" cy="138" r="1.6" fill="#6e5836"/>
+    <circle cx="108" cy="138" r="1.6" fill="#6e5836"/>
+    <path d="M94 144 Q100 147 106 144" stroke="#6e5836" stroke-width="1.2" fill="none"/>
+  </g>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <radialGradient id="sc4" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#f3cae0" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#f3cae0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="100" cy="110" r="96" fill="url(#sc4)"/>
+  <g stroke="#a86c8e" stroke-linecap="round" fill="none" opacity="0.85">
+    <path d="M58 184 Q44 152 64 116 Q82 80 56 44" stroke-width="2.4"/>
+    <path d="M82 188 Q70 154 88 116 Q104 78 82 40" stroke-width="2.4"/>
+    <path d="M118 188 Q132 154 112 116 Q96 78 118 40" stroke-width="2.4"/>
+    <path d="M142 184 Q156 152 136 116 Q120 80 144 44" stroke-width="2.4"/>
+  </g>
+  <g>
+    <circle cx="100" cy="112" r="22" fill="#f8dcec" stroke="#a86c8e" stroke-width="1.6"/>
+    <circle cx="93" cy="110" r="1.8" fill="#5a2c46"/>
+    <circle cx="107" cy="110" r="1.8" fill="#5a2c46"/>
+    <path d="M94 119 Q100 122 106 119" stroke="#5a2c46" stroke-width="1.2" fill="none"/>
+    <circle cx="86" cy="118" r="2.4" fill="#f4a5b8" opacity="0.7"/>
+    <circle cx="114" cy="118" r="2.4" fill="#f4a5b8" opacity="0.7"/>
+  </g>
+</svg>
