@@ -47,6 +47,7 @@
     cursor: pointer;
   }
   .ghost-btn:hover { background: rgba(255,255,255,0.28); }
+  .ghost-btn.off { opacity: 0.5; text-decoration: line-through; }
 
   main {
     flex: 1;
@@ -184,6 +185,9 @@
   .row.bot .bubble { background: #fff; border-top-left-radius: 3px; }
   .row.me .bubble { background: var(--kakao-yellow); border-top-right-radius: 3px; }
   .typing .bubble { color: #999; }
+  .bubble.img-bubble { padding: 4px; background: #fff; }
+  .bubble.img-bubble img { display: block; width: 230px; max-width: 60vw; border-radius: 10px; }
+  .bubble.img-loading { color: #999; font-size: 12.5px; }
 
   .composer {
     display: flex;
@@ -257,6 +261,7 @@
       <p>내가 만든 성격, AI가 연기하다</p>
     </div>
     <div class="head-right">
+      <button class="ghost-btn" id="imgToggle" title="메시지마다 이미지 생성 켜기/끄기">🖼 그림 ON</button>
       <button class="ghost-btn" id="settingsBtn">⚙ API 키 설정</button>
     </div>
   </header>
@@ -332,11 +337,16 @@
       </div>
       <label>API 키</label>
       <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
-      <label>모델</label>
+      <label>대화 모델 (텍스트)</label>
       <select id="modelSelect">
         <option value="gemini-2.0-flash">gemini-2.0-flash (무료·빠름·추천)</option>
         <option value="gemini-2.5-flash">gemini-2.5-flash</option>
         <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+      </select>
+      <label>이미지 모델</label>
+      <select id="imageModelSelect">
+        <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (추천)</option>
+        <option value="gemini-2.0-flash-preview-image-generation">gemini-2.0-flash-preview-image-generation</option>
       </select>
       <div class="modal-actions">
         <button class="btn-cancel" id="modalCancel">취소</button>
@@ -360,12 +370,16 @@
 
   var LS_KEY = "pcm_api_key";
   var LS_MODEL = "pcm_model";
+  var LS_IMG_MODEL = "pcm_image_model";
+  var LS_IMG_ON = "pcm_images_on";
 
   var els = {
     settingsBtn: document.getElementById("settingsBtn"),
+    imgToggle: document.getElementById("imgToggle"),
     modalBack: document.getElementById("modalBack"),
     apiKeyInput: document.getElementById("apiKeyInput"),
     modelSelect: document.getElementById("modelSelect"),
+    imageModelSelect: document.getElementById("imageModelSelect"),
     modalSave: document.getElementById("modalSave"),
     modalCancel: document.getElementById("modalCancel"),
     buildBtn: document.getElementById("buildBtn"),
@@ -386,8 +400,11 @@
 
   var state = {
     systemPrompt: "",
+    visualDesc: "",
     name: "",
     history: [],   // [{role:'user'|'model', parts:[{text}]}]
+    refImage: null, // {mime, data} 첫 생성 이미지를 기준 얼굴로 재사용
+    imagesOn: (localStorage.getItem(LS_IMG_ON) !== "0"),
     busy: false
   };
 
@@ -395,6 +412,7 @@
   function openModal() {
     els.apiKeyInput.value = localStorage.getItem(LS_KEY) || "";
     els.modelSelect.value = localStorage.getItem(LS_MODEL) || "gemini-2.0-flash";
+    els.imageModelSelect.value = localStorage.getItem(LS_IMG_MODEL) || "gemini-2.5-flash-image";
     els.modalBack.classList.add("open");
     els.apiKeyInput.focus();
   }
@@ -407,6 +425,7 @@
   els.modalSave.addEventListener("click", function () {
     localStorage.setItem(LS_KEY, els.apiKeyInput.value.trim());
     localStorage.setItem(LS_MODEL, els.modelSelect.value);
+    localStorage.setItem(LS_IMG_MODEL, els.imageModelSelect.value);
     closeModal();
   });
 
@@ -415,6 +434,24 @@
     return saved || (DEFAULT_API_KEY || "").trim();
   }
   function getModel() { return localStorage.getItem(LS_MODEL) || "gemini-2.0-flash"; }
+  function getImageModel() { return localStorage.getItem(LS_IMG_MODEL) || "gemini-2.5-flash-image"; }
+
+  // ---------- Image toggle ----------
+  function renderImgToggle() {
+    if (state.imagesOn) {
+      els.imgToggle.textContent = "🖼 그림 ON";
+      els.imgToggle.classList.remove("off");
+    } else {
+      els.imgToggle.textContent = "🖼 그림 OFF";
+      els.imgToggle.classList.add("off");
+    }
+  }
+  els.imgToggle.addEventListener("click", function () {
+    state.imagesOn = !state.imagesOn;
+    localStorage.setItem(LS_IMG_ON, state.imagesOn ? "1" : "0");
+    renderImgToggle();
+  });
+  renderImgToggle();
 
   // ---------- Build persona ----------
   function buildSystemPrompt() {
@@ -445,11 +482,26 @@
     return prompt;
   }
 
+  function buildVisualDesc() {
+    var rows = [
+      ["이름", els.p_name.value.trim()],
+      ["성격", els.p_personality.value.trim()],
+      ["좋아하는 것", els.p_likes.value.trim()],
+      ["그 밖의 설정", els.p_extra.value.trim()]
+    ];
+    return rows
+      .filter(function (r) { return r[1]; })
+      .map(function (r) { return r[0] + ": " + r[1]; })
+      .join(", ");
+  }
+
   function startChat() {
     var name = els.p_name.value.trim() || "내 챗봇";
     state.systemPrompt = buildSystemPrompt();
+    state.visualDesc = buildVisualDesc();
     state.name = name;
     state.history = [];
+    state.refImage = null;
 
     els.chatTitle.textContent = name;
     els.chatSub.textContent = "내가 설계한 페르소나";
@@ -465,7 +517,13 @@
       openModal();
       return;
     }
-    addBubble("bot", "안녕! 난 " + name + "이야. 무슨 얘기 할까?");
+    var greeting = "안녕! 난 " + name + "이야. 무슨 얘기 할까?";
+    addBubble("bot", greeting);
+    if (state.imagesOn) {
+      state.busy = true;
+      els.sendBtn.disabled = true;
+      generateImageForReply(greeting).then(finalize);
+    }
   }
   els.buildBtn.addEventListener("click", startChat);
 
@@ -552,6 +610,110 @@
     return null;
   }
 
+  // ---------- Gemini image call ----------
+  function extractImage(data) {
+    if (!data || !data.candidates) return null;
+    for (var i = 0; i < data.candidates.length; i++) {
+      var c = data.candidates[i];
+      if (c.content && c.content.parts) {
+        for (var j = 0; j < c.content.parts.length; j++) {
+          var inl = c.content.parts[j].inlineData || c.content.parts[j].inline_data;
+          if (inl && inl.data) {
+            return { mime: inl.mimeType || inl.mime_type || "image/png", data: inl.data };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function callGeminiImage(promptText, ref) {
+    var model = getImageModel();
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(getKey());
+    var parts = [{ text: promptText }];
+    if (ref && ref.data) {
+      parts.push({ inline_data: { mime_type: ref.mime || "image/png", data: ref.data } });
+    }
+    var body = { contents: [{ role: "user", parts: parts }] };
+    if (model.indexOf("image-generation") >= 0) {
+      body.generationConfig = { responseModalities: ["TEXT", "IMAGE"] };
+    }
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) {
+          return { ok: false, error: (data && data.error && data.error.message) || ("HTTP " + res.status) };
+        }
+        var img = extractImage(data);
+        if (!img) {
+          var fr = data && data.candidates && data.candidates[0] && data.candidates[0].finishReason;
+          return { ok: false, error: fr || "이미지 없음" };
+        }
+        return { ok: true, mime: img.mime, data: img.data };
+      });
+    });
+  }
+
+  function buildImagePrompt(reply, hasRef) {
+    var head = hasRef
+      ? "첨부된 이미지와 '같은 인물'의 외모를 유지하면서, "
+      : "한국 메신저 프로필 사진처럼 친근한 인물 일러스트(실사 사진 아님)로, ";
+    return head +
+      "인물 설정: " + (state.visualDesc || state.name) + ". " +
+      "지금 이 인물이 이렇게 말하는 중: \"" + reply + "\". " +
+      "그 말에 어울리는 표정과 분위기로 인물 중심으로 그려줘. 글자나 말풍선은 넣지 마.";
+  }
+
+  function addImagePlaceholder() {
+    var row = document.createElement("div");
+    row.className = "row bot";
+    var av = document.createElement("div");
+    av.className = "av";
+    av.textContent = (state.name || "?").charAt(0);
+    row.appendChild(av);
+    var wrap = document.createElement("div");
+    wrap.className = "bubble-wrap";
+    var b = document.createElement("div");
+    b.className = "bubble img-loading";
+    b.textContent = "🖼 그림 그리는 중…";
+    wrap.appendChild(b);
+    row.appendChild(wrap);
+    els.messages.appendChild(row);
+    scrollDown();
+    return b;
+  }
+
+  function generateImageForReply(reply) {
+    if (!state.imagesOn) return Promise.resolve();
+    var bubble = addImagePlaceholder();
+    return callGeminiImage(buildImagePrompt(reply, !!state.refImage), state.refImage).then(function (r) {
+      if (r.ok) {
+        bubble.className = "bubble img-bubble";
+        bubble.textContent = "";
+        var img = document.createElement("img");
+        img.src = "data:" + r.mime + ";base64," + r.data;
+        img.alt = state.name;
+        bubble.appendChild(img);
+        if (!state.refImage) state.refImage = { mime: r.mime, data: r.data };
+        scrollDown();
+      } else {
+        bubble.textContent = "🖼 이미지 생성 실패" + (r.error ? " (" + r.error + ")" : "");
+      }
+    }).catch(function (e) {
+      bubble.textContent = "🖼 이미지 오류: " + e.message;
+    });
+  }
+
+  function finalize() {
+    state.busy = false;
+    els.sendBtn.disabled = false;
+    els.input.focus();
+  }
+
   function send() {
     if (state.busy) return;
     var text = els.input.value.trim();
@@ -571,7 +733,6 @@
       if (!r.ok) {
         var msg = (r.data && r.data.error && r.data.error.message) || ("요청 실패 (" + r.status + ")");
         addBubble("bot", "⚠️ 오류: " + msg);
-        // roll back so failed turn doesn't pollute history
         state.history.pop();
         return;
       }
@@ -583,15 +744,12 @@
       }
       addBubble("bot", reply);
       state.history.push({ role: "model", parts: [{ text: reply }] });
+      return generateImageForReply(reply);
     }).catch(function (err) {
       removeTyping();
       addBubble("bot", "⚠️ 네트워크 오류: " + err.message);
       state.history.pop();
-    }).then(function () {
-      state.busy = false;
-      els.sendBtn.disabled = false;
-      els.input.focus();
-    });
+    }).then(finalize);
   }
 
   els.sendBtn.addEventListener("click", send);
