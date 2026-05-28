@@ -343,9 +343,14 @@
         <option value="gemini-2.5-flash">gemini-2.5-flash</option>
         <option value="gemini-1.5-flash">gemini-1.5-flash</option>
       </select>
-      <label>이미지 모델</label>
+      <label>이미지 제공자</label>
+      <select id="imageProviderSelect">
+        <option value="pollinations">Pollinations (무료·키 불필요·추천)</option>
+        <option value="gemini">Gemini (유료/결제 설정 필요)</option>
+      </select>
+      <label>Gemini 이미지 모델 (위에서 Gemini 선택 시)</label>
       <select id="imageModelSelect">
-        <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (추천)</option>
+        <option value="gemini-2.5-flash-image">gemini-2.5-flash-image</option>
         <option value="gemini-2.0-flash-preview-image-generation">gemini-2.0-flash-preview-image-generation</option>
       </select>
       <div class="modal-actions">
@@ -371,6 +376,7 @@
   var LS_KEY = "pcm_api_key";
   var LS_MODEL = "pcm_model";
   var LS_IMG_MODEL = "pcm_image_model";
+  var LS_IMG_PROVIDER = "pcm_image_provider";
   var LS_IMG_ON = "pcm_images_on";
 
   var els = {
@@ -379,6 +385,7 @@
     modalBack: document.getElementById("modalBack"),
     apiKeyInput: document.getElementById("apiKeyInput"),
     modelSelect: document.getElementById("modelSelect"),
+    imageProviderSelect: document.getElementById("imageProviderSelect"),
     imageModelSelect: document.getElementById("imageModelSelect"),
     modalSave: document.getElementById("modalSave"),
     modalCancel: document.getElementById("modalCancel"),
@@ -403,8 +410,9 @@
     visualDesc: "",
     name: "",
     history: [],   // [{role:'user'|'model', parts:[{text}]}]
-    refImage: null, // {mime, data} 첫 생성 이미지를 기준 얼굴로 재사용
-    imagesOn: (localStorage.getItem(LS_IMG_ON) === "1"),
+    imageSeed: 0,
+    profileImageUrl: null, // 챗봇 만들 때 1번 생성해 저장, 모든 답변에 같은 이미지 사용
+    imagesOn: (localStorage.getItem(LS_IMG_ON) !== "0"),
     busy: false
   };
 
@@ -412,6 +420,7 @@
   function openModal() {
     els.apiKeyInput.value = localStorage.getItem(LS_KEY) || "";
     els.modelSelect.value = localStorage.getItem(LS_MODEL) || "gemini-2.0-flash";
+    els.imageProviderSelect.value = localStorage.getItem(LS_IMG_PROVIDER) || "pollinations";
     els.imageModelSelect.value = localStorage.getItem(LS_IMG_MODEL) || "gemini-2.5-flash-image";
     els.modalBack.classList.add("open");
     els.apiKeyInput.focus();
@@ -425,6 +434,7 @@
   els.modalSave.addEventListener("click", function () {
     localStorage.setItem(LS_KEY, els.apiKeyInput.value.trim());
     localStorage.setItem(LS_MODEL, els.modelSelect.value);
+    localStorage.setItem(LS_IMG_PROVIDER, els.imageProviderSelect.value);
     localStorage.setItem(LS_IMG_MODEL, els.imageModelSelect.value);
     closeModal();
   });
@@ -434,6 +444,7 @@
     return saved || (DEFAULT_API_KEY || "").trim();
   }
   function getModel() { return localStorage.getItem(LS_MODEL) || "gemini-2.0-flash"; }
+  function getImageProvider() { return localStorage.getItem(LS_IMG_PROVIDER) || "pollinations"; }
   function getImageModel() { return localStorage.getItem(LS_IMG_MODEL) || "gemini-2.5-flash-image"; }
 
   // ---------- Image toggle ----------
@@ -501,7 +512,8 @@
     state.visualDesc = buildVisualDesc();
     state.name = name;
     state.history = [];
-    state.refImage = null;
+    state.profileImageUrl = null;
+    state.imageSeed = Math.floor(Math.random() * 1000000000);
 
     els.chatTitle.textContent = name;
     els.chatSub.textContent = "내가 설계한 페르소나";
@@ -522,7 +534,7 @@
     if (state.imagesOn) {
       state.busy = true;
       els.sendBtn.disabled = true;
-      generateImageForReply(greeting).then(finalize);
+      generateAndShowProfileImage().then(finalize);
     }
   }
   els.buildBtn.addEventListener("click", startChat);
@@ -658,14 +670,15 @@
     });
   }
 
-  function buildImagePrompt(reply, hasRef) {
-    var head = hasRef
-      ? "첨부된 이미지와 '같은 인물'의 외모를 유지하면서, "
-      : "한국 메신저 프로필 사진처럼 친근한 인물 일러스트(실사 사진 아님)로, ";
-    return head +
-      "인물 설정: " + (state.visualDesc || state.name) + ". " +
-      "지금 이 인물이 이렇게 말하는 중: \"" + reply + "\". " +
-      "그 말에 어울리는 표정과 분위기로 인물 중심으로 그려줘. 글자나 말풍선은 넣지 마.";
+  function buildPersonaImagePrompt() {
+    return "portrait illustration of a single character, friendly mobile messenger profile picture style, " +
+      "soft colors, clean background, warm neutral expression, no text, no captions, no speech bubbles. " +
+      "인물: " + (state.visualDesc || state.name) + ".";
+  }
+
+  function pollinationsUrl(prompt, seed) {
+    return "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt) +
+      "?width=512&height=512&model=flux&nologo=true&seed=" + seed;
   }
 
   function addImagePlaceholder() {
@@ -687,25 +700,71 @@
     return b;
   }
 
-  function generateImageForReply(reply) {
+  // 챗봇을 만드는 순간 1번만 호출. 결과를 state.profileImageUrl에 저장해서
+  // 이후 모든 답변 말풍선에는 같은 이미지를 재사용한다(일관성 + 무료 할당량 절약).
+  function generateAndShowProfileImage() {
     if (!state.imagesOn) return Promise.resolve();
     var bubble = addImagePlaceholder();
-    return callGeminiImage(buildImagePrompt(reply, !!state.refImage), state.refImage).then(function (r) {
+    var prompt = buildPersonaImagePrompt();
+    var provider = getImageProvider();
+
+    function fillFromUrl(url) {
+      state.profileImageUrl = url;
+      bubble.className = "bubble img-bubble";
+      bubble.textContent = "";
+      var img = document.createElement("img");
+      img.src = url;
+      img.alt = state.name;
+      bubble.appendChild(img);
+      scrollDown();
+    }
+    function fail(msg) {
+      bubble.textContent = "🖼 이미지 생성 실패" + (msg ? " (" + msg + ")" : "");
+      state.profileImageUrl = null;
+    }
+
+    if (provider === "pollinations") {
+      var url = pollinationsUrl(prompt, state.imageSeed);
+      return new Promise(function (resolve) {
+        var probe = new Image();
+        probe.onload = function () { fillFromUrl(url); resolve(); };
+        probe.onerror = function () { fail("네트워크 오류"); resolve(); };
+        probe.src = url;
+      });
+    }
+
+    // gemini path (requires key + billing)
+    if (!getKey()) { fail("API 키 없음"); return Promise.resolve(); }
+    return callGeminiImage(prompt, null).then(function (r) {
       if (r.ok) {
-        bubble.className = "bubble img-bubble";
-        bubble.textContent = "";
-        var img = document.createElement("img");
-        img.src = "data:" + r.mime + ";base64," + r.data;
-        img.alt = state.name;
-        bubble.appendChild(img);
-        if (!state.refImage) state.refImage = { mime: r.mime, data: r.data };
-        scrollDown();
+        fillFromUrl("data:" + r.mime + ";base64," + r.data);
       } else {
-        bubble.textContent = "🖼 이미지 생성 실패" + (r.error ? " (" + r.error + ")" : "");
+        fail(r.error || "");
       }
-    }).catch(function (e) {
-      bubble.textContent = "🖼 이미지 오류: " + e.message;
-    });
+    }).catch(function (e) { fail(e.message); });
+  }
+
+  // 저장된 프로필 이미지를 봇 응답 옆에 다시 보여준다(API 호출 없음).
+  function addProfileImageBubble() {
+    if (!state.imagesOn || !state.profileImageUrl) return;
+    var row = document.createElement("div");
+    row.className = "row bot";
+    var av = document.createElement("div");
+    av.className = "av";
+    av.textContent = (state.name || "?").charAt(0);
+    row.appendChild(av);
+    var wrap = document.createElement("div");
+    wrap.className = "bubble-wrap";
+    var b = document.createElement("div");
+    b.className = "bubble img-bubble";
+    var img = document.createElement("img");
+    img.src = state.profileImageUrl;
+    img.alt = state.name;
+    b.appendChild(img);
+    wrap.appendChild(b);
+    row.appendChild(wrap);
+    els.messages.appendChild(row);
+    scrollDown();
   }
 
   function finalize() {
@@ -744,7 +803,7 @@
       }
       addBubble("bot", reply);
       state.history.push({ role: "model", parts: [{ text: reply }] });
-      return generateImageForReply(reply);
+      addProfileImageBubble();
     }).catch(function (err) {
       removeTyping();
       addBubble("bot", "⚠️ 네트워크 오류: " + err.message);
