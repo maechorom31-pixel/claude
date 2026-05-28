@@ -404,7 +404,7 @@
     name: "",
     history: [],   // [{role:'user'|'model', parts:[{text}]}]
     refImage: null, // {mime, data} 첫 생성 이미지를 기준 얼굴로 재사용
-    imagesOn: (localStorage.getItem(LS_IMG_ON) !== "0"),
+    imagesOn: (localStorage.getItem(LS_IMG_ON) === "1"),
     busy: false
   };
 
