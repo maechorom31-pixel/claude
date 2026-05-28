@@ -139,6 +139,7 @@
     background: #fff; color: #5a7bf0;
     display: flex; align-items: center; justify-content: center;
     font-weight: 800; font-size: 16px;
+    overflow: hidden;
   }
   .chat-head .title { font-weight: 800; font-size: 15px; }
   .chat-head .sub { font-size: 11.5px; opacity: 0.7; }
@@ -170,6 +171,10 @@
     background: #fff; color: #5a7bf0;
     display: flex; align-items: center; justify-content: center;
     font-weight: 800; font-size: 15px; flex-shrink: 0;
+    overflow: hidden;
+  }
+  .chat-head .avatar img, .row .av img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
   }
   .bubble-wrap { display: flex; flex-direction: column; }
   .row.me .bubble-wrap { align-items: flex-end; }
@@ -548,7 +553,11 @@
     if (role === "bot") {
       var av = document.createElement("div");
       av.className = "av";
-      av.textContent = (state.name || "?").charAt(0);
+      if (state.profileImageUrl) {
+        setAvatarImage(av);
+      } else {
+        av.textContent = (state.name || "?").charAt(0);
+      }
       row.appendChild(av);
     }
     var wrap = document.createElement("div");
@@ -573,9 +582,21 @@
     var row = document.createElement("div");
     row.className = "row bot typing";
     row.id = "typingRow";
-    row.innerHTML =
-      '<div class="av">' + ((state.name || "?").charAt(0)) + '</div>' +
-      '<div class="bubble-wrap"><div class="bubble">입력 중…</div></div>';
+    var av = document.createElement("div");
+    av.className = "av";
+    if (state.profileImageUrl) {
+      setAvatarImage(av);
+    } else {
+      av.textContent = (state.name || "?").charAt(0);
+    }
+    var wrap = document.createElement("div");
+    wrap.className = "bubble-wrap";
+    var b = document.createElement("div");
+    b.className = "bubble";
+    b.textContent = "입력 중…";
+    wrap.appendChild(b);
+    row.appendChild(av);
+    row.appendChild(wrap);
     els.messages.appendChild(row);
     scrollDown();
   }
@@ -681,90 +702,56 @@
       "?width=512&height=512&model=flux&nologo=true&seed=" + seed;
   }
 
-  function addImagePlaceholder() {
-    var row = document.createElement("div");
-    row.className = "row bot";
-    var av = document.createElement("div");
-    av.className = "av";
-    av.textContent = (state.name || "?").charAt(0);
-    row.appendChild(av);
-    var wrap = document.createElement("div");
-    wrap.className = "bubble-wrap";
-    var b = document.createElement("div");
-    b.className = "bubble img-loading";
-    b.textContent = "🖼 그림 그리는 중…";
-    wrap.appendChild(b);
-    row.appendChild(wrap);
-    els.messages.appendChild(row);
-    scrollDown();
-    return b;
+  function setAvatarImage(el) {
+    if (!state.profileImageUrl) return;
+    el.textContent = "";
+    var img = document.createElement("img");
+    img.src = state.profileImageUrl;
+    img.alt = state.name;
+    el.appendChild(img);
+  }
+
+  // 헤더의 큰 아바타와 이미 그려진 답변 옆 작은 아바타들에 모두 적용
+  function applyProfileImageToAvatars() {
+    if (!state.profileImageUrl) return;
+    setAvatarImage(els.chatAvatar);
+    var avs = els.messages.querySelectorAll(".row.bot .av");
+    for (var i = 0; i < avs.length; i++) setAvatarImage(avs[i]);
   }
 
   // 챗봇을 만드는 순간 1번만 호출. 결과를 state.profileImageUrl에 저장해서
-  // 이후 모든 답변 말풍선에는 같은 이미지를 재사용한다(일관성 + 무료 할당량 절약).
+  // 이후 모든 답변 옆 아바타에도 같은 이미지를 그대로 보여준다.
   function generateAndShowProfileImage() {
     if (!state.imagesOn) return Promise.resolve();
-    var bubble = addImagePlaceholder();
+    els.chatSub.textContent = "🖼 프로필 그림 그리는 중…";
     var prompt = buildPersonaImagePrompt();
     var provider = getImageProvider();
 
-    function fillFromUrl(url) {
-      state.profileImageUrl = url;
-      bubble.className = "bubble img-bubble";
-      bubble.textContent = "";
-      var img = document.createElement("img");
-      img.src = url;
-      img.alt = state.name;
-      bubble.appendChild(img);
-      scrollDown();
-    }
-    function fail(msg) {
-      bubble.textContent = "🖼 이미지 생성 실패" + (msg ? " (" + msg + ")" : "");
-      state.profileImageUrl = null;
+    function done(url) {
+      if (url) {
+        state.profileImageUrl = url;
+        applyProfileImageToAvatars();
+        els.chatSub.textContent = "내가 설계한 페르소나";
+      } else {
+        els.chatSub.textContent = "내가 설계한 페르소나 (프로필 그림 실패)";
+      }
     }
 
     if (provider === "pollinations") {
       var url = pollinationsUrl(prompt, state.imageSeed);
       return new Promise(function (resolve) {
         var probe = new Image();
-        probe.onload = function () { fillFromUrl(url); resolve(); };
-        probe.onerror = function () { fail("네트워크 오류"); resolve(); };
+        probe.onload = function () { done(url); resolve(); };
+        probe.onerror = function () { done(null); resolve(); };
         probe.src = url;
       });
     }
 
     // gemini path (requires key + billing)
-    if (!getKey()) { fail("API 키 없음"); return Promise.resolve(); }
+    if (!getKey()) { done(null); return Promise.resolve(); }
     return callGeminiImage(prompt, null).then(function (r) {
-      if (r.ok) {
-        fillFromUrl("data:" + r.mime + ";base64," + r.data);
-      } else {
-        fail(r.error || "");
-      }
-    }).catch(function (e) { fail(e.message); });
-  }
-
-  // 저장된 프로필 이미지를 봇 응답 옆에 다시 보여준다(API 호출 없음).
-  function addProfileImageBubble() {
-    if (!state.imagesOn || !state.profileImageUrl) return;
-    var row = document.createElement("div");
-    row.className = "row bot";
-    var av = document.createElement("div");
-    av.className = "av";
-    av.textContent = (state.name || "?").charAt(0);
-    row.appendChild(av);
-    var wrap = document.createElement("div");
-    wrap.className = "bubble-wrap";
-    var b = document.createElement("div");
-    b.className = "bubble img-bubble";
-    var img = document.createElement("img");
-    img.src = state.profileImageUrl;
-    img.alt = state.name;
-    b.appendChild(img);
-    wrap.appendChild(b);
-    row.appendChild(wrap);
-    els.messages.appendChild(row);
-    scrollDown();
+      done(r.ok ? "data:" + r.mime + ";base64," + r.data : null);
+    }).catch(function () { done(null); });
   }
 
   function finalize() {
@@ -803,7 +790,6 @@
       }
       addBubble("bot", reply);
       state.history.push({ role: "model", parts: [{ text: reply }] });
-      addProfileImageBubble();
     }).catch(function (err) {
       removeTyping();
       addBubble("bot", "⚠️ 네트워크 오류: " + err.message);
