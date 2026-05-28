@@ -702,6 +702,44 @@
       "?width=512&height=512&model=flux&nologo=true&seed=" + seed;
   }
 
+  function loadImageOnce(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var img = new Image();
+      var t = setTimeout(function () {
+        if (done) return;
+        done = true; img.src = "";
+        reject(new Error("timeout"));
+      }, timeoutMs);
+      img.onload = function () {
+        if (done) return;
+        done = true; clearTimeout(t);
+        resolve(url);
+      };
+      img.onerror = function () {
+        if (done) return;
+        done = true; clearTimeout(t);
+        reject(new Error("error"));
+      };
+      img.src = url;
+    });
+  }
+
+  function loadPollinationsWithRetry(baseUrl, onAttempt) {
+    var maxAttempts = 3;
+    var i = 0;
+    function go() {
+      i++;
+      if (onAttempt) onAttempt(i, maxAttempts);
+      var url = baseUrl + "&_r=" + i;
+      return loadImageOnce(url, 25000).catch(function () {
+        if (i >= maxAttempts) throw new Error("failed");
+        return new Promise(function (r) { setTimeout(r, 1500 * i); }).then(go);
+      });
+    }
+    return go();
+  }
+
   function setAvatarImage(el) {
     if (!state.profileImageUrl) return;
     el.textContent = "";
@@ -739,11 +777,12 @@
 
     if (provider === "pollinations") {
       var url = pollinationsUrl(prompt, state.imageSeed);
-      return new Promise(function (resolve) {
-        var probe = new Image();
-        probe.onload = function () { done(url); resolve(); };
-        probe.onerror = function () { done(null); resolve(); };
-        probe.src = url;
+      return loadPollinationsWithRetry(url, function (i, total) {
+        if (i > 1) els.chatSub.textContent = "🖼 다시 시도 중… (" + i + "/" + total + ")";
+      }).then(function (loaded) {
+        done(loaded);
+      }).catch(function () {
+        done(null);
       });
     }
 
