@@ -13,8 +13,10 @@ the M4 roadmap.
 
 ```bash
 pip install -r requirements.txt
-python main.py                 # 2 teams x 3 worms
-python main.py --teams 3 --worms 4 --seed 42
+python main.py                       # 2 teams x 3 worms (local hotseat)
+python main.py --cpu                 # single player: you vs CPU
+python main.py --teams 3 --humans 1  # Team 1 human, Teams 2 & 3 CPU
+python main.py --teams 2 --humans 0  # watch CPU vs CPU
 ```
 
 ## Controls
@@ -52,8 +54,17 @@ terrain it hits. While attached you hang as a pendulum — **← →** add swing
 so a well-timed release launches you across the map. Using the rope does **not**
 end your turn, so you can rope into position and *then* fire.
 
+## Single-player (CPU opponent)
+
+Pass `--cpu` (or `--humans N`) to make the trailing teams computer-controlled.
+The AI picks the nearest enemy and finds a firing solution by *simulating*
+candidate shots through the real terrain and wind, scoring each by where it
+lands and avoiding self-/friendly damage. A little aim noise keeps it beatable.
+It chooses between the bazooka, grenade and holy hand grenade.
+
 ## What's implemented
 
+- **Single-player AI** — ballistic-search CPU opponent, any mix of human/CPU teams.
 - **Destructible terrain** — pixel-mask terrain; explosions carve craters.
 - **Worm physics** — gravity, slope walking, jumping, knockback, fall damage, drowning.
 - **Ninja Rope** — grapple + pendulum swing + reel + momentum release.
@@ -78,6 +89,7 @@ worms/
   rope.py            # ninja rope grapple + pendulum physics
   entities.py        # sheep, dynamite, mines, oil drums, supply crates
   particles.py       # particle system + screen shake
+  ai.py              # single-player CPU controller (ballistic shot search)
   game.py            # game state, turn machine, firing dispatch, detonations
   render.py          # all drawing (reads state, never mutates)
 tests/
@@ -100,4 +112,4 @@ weapon end-to-end.
 ## Roadmap (M4)
 
 Optional next steps: networked multiplayer (deterministic lockstep), replays,
-a map editor, single-player AI bots, and sound effects.
+a map editor, smarter AI (repositioning / rope use / weapon variety), and sound effects.

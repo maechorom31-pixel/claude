@@ -184,6 +184,47 @@ def test_sudden_death_triggers_and_caps_hp():
             assert w.hp <= 1
 
 
+def test_ai_chooses_nearest_enemy():
+    from worms.ai import choose_target
+    g = Game(640, 400)
+    g.new_game(teams=2, worms_per_team=1, seed=2, ai_teams={1})
+    shooter = g.teams[1].worms[0]
+    target = choose_target(g, shooter)
+    assert target is not None
+    assert target.team_idx != shooter.team_idx
+
+
+def test_ai_best_shot_lands_near_target_on_flat_ground():
+    from worms.ai import best_shot
+    from worms.game import Team
+    g = Game(800, 400)
+    g.terrain.flat_ground(300)
+    g.wind = 0
+    shooter = Worm(120, 290, 1, "cpu")
+    target = Worm(600, 290, 0, "you")
+    g.teams = [Team(0, (0, 0, 0), "you"), Team(1, (0, 0, 0), "cpu", is_ai=True)]
+    g.teams[0].worms.append(target)
+    g.teams[1].worms.append(shooter)
+    plan = best_shot(g, shooter, target)
+    assert plan is not None
+    assert plan["facing"] == 1
+    assert plan["dist"] <= 40          # simulated blast lands close to the target
+
+
+def test_ai_takes_its_turn():
+    from worms.ai import AIController
+    g = Game(800, 400)
+    g.new_game(teams=2, worms_per_team=1, seed=4, ai_teams={1})
+    # Make team 1 (CPU) the active team.
+    while not g.current_team().is_ai:
+        g.timer = 1
+        g.update()
+    ai = AIController(seed=1, think_frames=0)
+    ai.update(g)
+    assert g.fired                     # the CPU committed a shot
+    assert g.state == BUSY
+
+
 def test_all_weapons_fire_without_error():
     for wid in WEAPON_ORDER:
         g = Game(640, 400)

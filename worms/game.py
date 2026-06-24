@@ -35,10 +35,11 @@ _EXPLOSION_COLORS = [(255, 220, 120), (255, 170, 60), (230, 90, 40), (90, 90, 90
 
 
 class Team:
-    def __init__(self, idx, color, name):
+    def __init__(self, idx, color, name, is_ai=False):
         self.idx = idx
         self.color = color
         self.name = name
+        self.is_ai = is_ai
         self.worms = []
         self.active = -1
 
@@ -87,7 +88,7 @@ class Game:
         self.winner = None
 
     # --- setup -------------------------------------------------------------
-    def new_game(self, teams=2, worms_per_team=3, seed=None):
+    def new_game(self, teams=2, worms_per_team=3, seed=None, ai_teams=None):
         self.rng = random.Random(seed)
         self.terrain = Terrain(self.width, self.height)
         self.terrain.generate(self.rng.randint(0, 10 ** 6))
@@ -96,12 +97,15 @@ class Game:
         self.shake = ScreenShake()
         self._reset_runtime()
 
+        ai_teams = set(ai_teams or ())
         self.teams = []
         slots = teams * worms_per_team
         spacing = self.width // (slots + 1)
         slot = 1
         for ti in range(teams):
-            team = Team(ti, TEAM_COLORS[ti % len(TEAM_COLORS)], f"Team {ti + 1}")
+            is_ai = ti in ai_teams
+            label = f"Team {ti + 1}" + (" [CPU]" if is_ai else "")
+            team = Team(ti, TEAM_COLORS[ti % len(TEAM_COLORS)], label, is_ai=is_ai)
             for wi in range(worms_per_team):
                 x = spacing * slot
                 slot += 1
