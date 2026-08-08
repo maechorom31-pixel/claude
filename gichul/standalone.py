@@ -48,7 +48,8 @@ def build(conn: sqlite3.Connection, out_path: str, *,
           subject: str | None = None, year: int | None = None,
           exam: str | None = None, images: bool | None = None,
           max_mb: float = DEFAULT_MAX_MB,
-          pdf_base_url: str | None = None, pdf_root: str | None = None) -> dict:
+          pdf_base_url: str | None = None, pdf_root: str | None = None,
+          upload_url: str | None = None) -> dict:
     """자립형 HTML을 쓰고 요약을 돌려준다.
 
     images=None 이면 예산(max_mb)에 맞는지 보고 알아서 정한다.
@@ -60,7 +61,7 @@ def build(conn: sqlite3.Connection, out_path: str, *,
     """
     from urllib.parse import quote
 
-    from .meta import subject_aliases
+    from .meta import subject_aliases, subject_sort_key
 
     where, params = ["s.kind='question'"], []
     if subject:
@@ -130,7 +131,8 @@ def build(conn: sqlite3.Connection, out_path: str, *,
         counts[it["subject"]] = counts.get(it["subject"], 0) + 1
 
     data = {"papers": list(papers.values()), "items": items, "counts": counts,
-            "images": bool(images)}
+            "order": sorted(counts, key=subject_sort_key),
+            "upload": upload_url, "images": bool(images)}
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     html = _TEMPLATE.replace("/*__DATA__*/", "window.GICHUL=" + payload + ";")
@@ -569,9 +571,12 @@ footer b{color:var(--ink-soft); font-weight:600}
       "<p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어 "
       + "유니코드 매핑이 없습니다. 수학·화학·물리처럼 수식이 많은 과목에서 두드러지고, "
       + "국어·영어·사탐은 거의 영향이 없습니다.</p>",
-      "<p>검색과 표기 집계는 파이썬 쪽 <code>normalize.py</code> 와 같은 규칙입니다. "
-      + "이 파일은 <code>gichul html</code> 로 다시 만들면 갱신됩니다.</p>",
     ];
+    if (DATA.upload){
+      notes.push('<p><a class="orig" href="' + esc(DATA.upload)
+        + '">PDF 추가하기</a> — 올리면 1~2분 뒤 자동 반영됩니다. '
+        + '같은 파일은 알아서 건너뜁니다.</p>');
+    }
     if (!DATA.images){
       notes.unshift("<p><b>이 파일에는 지면 이미지가 없습니다.</b> 문항 수가 많아 "
         + "텍스트만 담았습니다. 지면을 보려면 <code>gichul web</code> 을 쓰거나 "
@@ -580,7 +585,7 @@ footer b{color:var(--ink-soft); font-weight:600}
     document.getElementById("foot").innerHTML = notes.join("");
   })();
 
-  const subs = Object.keys(DATA.counts).sort();
+  const subs = DATA.order || Object.keys(DATA.counts).sort();
   document.getElementById("subjects").innerHTML =
     '<button class="chip" type="button" data-sub="" aria-pressed="true">전체'
     + '<span class="n">' + DATA.items.length + "</span></button>"

@@ -178,54 +178,25 @@ def _copy_pdfs_into_site(pdf_dir: str, site_dir: str) -> int:
 
 
 def build_site(conn, site_dir: str, pdf_dir: str) -> list[str]:
+    """첫 화면 = 검색 페이지 하나.
+
+    과목별 페이지를 따로 두지 않는다. 검색창의 과목 칩으로 이미 고를 수
+    있는데 목차를 한 번 더 거치게 할 이유가 없다. 지면 이미지는 용량 예산
+    안이면 넣고, 넘으면 빼되 문항마다 원본 PDF 해당 쪽 링크가 남는다.
+    """
     os.makedirs(site_dir, exist_ok=True)
     notes = []
     if os.path.isdir(pdf_dir):
         n = _copy_pdfs_into_site(pdf_dir, site_dir)
         if n:
             notes.append(f"원본 PDF {n}개를 사이트에 실음")
-    entries = []
 
-    for subject, n_exams, n_q in idx.subjects(conn):
-        if subject == "(미상)":
-            continue
-        fname = f"{subject}.html"
-        # 링크는 사이트에 복사된 사본(site/pdfs/…)을 가리킨다. 검색 페이지가
-        # site/ 바로 아래 있으므로 "pdfs/파일명#page=N" 상대 경로면 된다.
-        r = build(conn, os.path.join(site_dir, fname), subject=subject,
-                  max_mb=PAGE_BUDGET_MB, pdf_base_url="pdfs", pdf_root=pdf_dir)
-        tag = "" if r["images"] else " · 텍스트만"
-        entries.append((fname, subject, f"시험지 {n_exams} · 문항 {n_q}{tag}"))
-        notes.append(f"{fname}: 문항 {r['questions']} / {r['size']/2**20:.1f}MB"
-                     + ("" if r["images"] else " (이미지 제외)"))
-
-    r = build(conn, os.path.join(site_dir, "전체-텍스트.html"), images=False,
-              pdf_base_url="pdfs", pdf_root=pdf_dir)
-    entries.append(("전체-텍스트.html", "전체 과목 통합",
-                    f"문항 {r['questions']} · 텍스트만"))
-
-    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-    items = "".join(
-        f'<li><a href="{html.escape(f)}"><span>{html.escape(t)}</span>'
-        f"<small>{html.escape(d)}</small></a></li>"
-        for f, t, d in entries)
-    with open(os.path.join(site_dir, "index.html"), "w", encoding="utf-8") as f:
-        f.write(
-            '<!doctype html><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f"<title>기출 용례 검색</title><style>{_INDEX_CSS}</style>"
-            '<div class="wrap"><h1><span>기출 용례 검색</span></h1>'
-            f"<ul>{items}</ul>"
-            + _footer(now))
+    r = build(conn, os.path.join(site_dir, "index.html"),
+              max_mb=PAGE_BUDGET_MB, pdf_base_url="pdfs", pdf_root=pdf_dir,
+              upload_url=_upload_url())
+    notes.append(f"index.html: 문항 {r['questions']} / {r['size']/2**20:.1f}MB"
+                 + ("" if r["images"] else " (지면 이미지 없이 — 원본 PDF 링크로 봄)"))
     return notes
-
-
-def _footer(now: str) -> str:
-    url = _upload_url()
-    add = (f' · <a style="border:none;display:inline;padding:0;color:inherit;'
-           f'text-decoration:underline" href="{html.escape(url)}">PDF 추가하기</a>'
-           if url else "")
-    return (f"<footer>갱신 {now}{add} — 올리면 1~2분 뒤 자동 반영</footer></div>")
 
 
 def _upload_url() -> str | None:

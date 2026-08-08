@@ -37,6 +37,28 @@ _TYPE_SUFFIX = re.compile(r"^([가나ABＡＢ])\s*형$")
 # 개별 과목이 아니라 시험 묶음 이름. 이게 잡히면 실제 과목을 더 찾아야 한다.
 UMBRELLA = {"과학탐구", "사회탐구", "직업탐구", "탐구", "제2외국어", "한문"}
 
+# 수능 시간표 순서: 국어 → 수학 → 영어 → 한국사 → 사탐 → 과탐 → 그 밖.
+# 과목 목록·칩을 이 순서로 늘어놓는다.
+_ORDER_GROUPS = [
+    ["국어", "화법과작문", "언어와매체", "화법과언어", "독서와작문", "독서", "문학"],
+    ["수학", "수학I", "수학II", "미적분", "확률과통계", "기하",
+     "수학가형", "수학나형", "수학A형", "수학B형", "미적분II"],
+    ["영어", "영어I", "영어II", "영어독해와작문"],
+    ["한국사"],
+    ["통합사회", "생활과윤리", "윤리와사상", "한국지리", "세계지리",
+     "동아시아사", "세계사", "경제", "정치와법", "법과정치", "사회문화"],
+    ["통합과학", "물리학I", "물리학II", "화학I", "화학II",
+     "생명과학I", "생명과학II", "지구과학I", "지구과학II",
+     "물리I", "물리II", "생물I", "생물II", "지구과학"],
+]
+_ORDER = {name: (g, i) for g, group in enumerate(_ORDER_GROUPS)
+          for i, name in enumerate(group)}
+
+
+def subject_sort_key(subject: str | None) -> tuple:
+    g, i = _ORDER.get(subject or "", (len(_ORDER_GROUPS), 0))
+    return (g, i, subject or "")
+
 
 @dataclass
 class ExamMeta:
