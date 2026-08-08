@@ -299,21 +299,26 @@ def build_site(conn, site_dir: str, pdf_dir: str) -> list[str]:
     use_pdfjs = fetch_pdfjs(site_dir)
     r = build(conn, os.path.join(site_dir, "index.html"),
               max_mb=PAGE_BUDGET_MB, pdf_base_url="pdfs", pdf_root=pdf_dir,
-              upload_url=_upload_url(), pdfjs=use_pdfjs,
-              images=False if use_pdfjs else None)
+              upload_url=_upload_url(), repo_url=_repo_url(),
+              pdfjs=use_pdfjs, images=False if use_pdfjs else None)
     mode = "지면은 열 때 PDF에서 그림" if use_pdfjs else (
         "이미지 내장" if r["images"] else "이미지 없음 · PDF 링크만")
     notes.append(f"index.html: 문항 {r['questions']} / {r['size']/2**20:.1f}MB ({mode})")
     return notes
 
 
+def _repo_url() -> str | None:
+    repo = os.environ.get("GITHUB_REPOSITORY")          # 예: 계정/저장소
+    return f"https://github.com/{repo}" if repo else None
+
+
 def _upload_url() -> str | None:
     """GitHub 웹의 '이 폴더에 파일 올리기' 화면으로 바로 가는 주소."""
-    repo = os.environ.get("GITHUB_REPOSITORY")          # 예: 계정/저장소
+    repo = _repo_url()
     if not repo:
         return None
     branch = os.environ.get("GITHUB_REF_NAME", "main")
-    return f"https://github.com/{repo}/upload/{branch}/pdfs"
+    return f"{repo}/upload/{branch}/pdfs"
 
 
 def write_empty_site(site_dir: str) -> None:

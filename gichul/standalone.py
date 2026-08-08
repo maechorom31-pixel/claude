@@ -49,7 +49,8 @@ def build(conn: sqlite3.Connection, out_path: str, *,
           exam: str | None = None, images: bool | None = None,
           max_mb: float = DEFAULT_MAX_MB,
           pdf_base_url: str | None = None, pdf_root: str | None = None,
-          upload_url: str | None = None, pdfjs: bool = False) -> dict:
+          upload_url: str | None = None, repo_url: str | None = None,
+          pdfjs: bool = False) -> dict:
     """자립형 HTML을 쓰고 요약을 돌려준다.
 
     images=None 이면 예산(max_mb)에 맞는지 보고 알아서 정한다.
@@ -140,7 +141,8 @@ def build(conn: sqlite3.Connection, out_path: str, *,
 
     data = {"papers": list(papers.values()), "items": items, "counts": counts,
             "order": sorted(counts, key=subject_sort_key),
-            "upload": upload_url, "images": bool(images), "pdfjs": bool(pdfjs)}
+            "upload": upload_url, "repo": repo_url,
+            "images": bool(images), "pdfjs": bool(pdfjs)}
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     pdfjs_tags = ('<script src="vendor/pdf.min.js"></script>'
@@ -348,6 +350,22 @@ footer{
 }
 footer p{margin:.35rem 0}
 footer b{color:var(--ink-soft); font-weight:600}
+.admin{
+  margin-top:1rem; padding:.8rem .9rem; border:1px solid var(--rule);
+  border-radius:3px; background:var(--sunken);
+  display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;
+}
+.admin > b{flex-basis:100%; font-size:.78rem; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--ink-faint)}
+.abtn{
+  flex:1 1 12rem; display:block; padding:.55rem .7rem;
+  border:1px solid var(--rule-strong); border-radius:3px;
+  background:var(--paper); text-decoration:none; color:var(--ink);
+  line-height:1.35;
+}
+.abtn:hover{border-color:var(--ink-faint)}
+.abtn span{font-weight:600; font-size:.85rem}
+.abtn small{display:block; color:var(--ink-faint); font-size:.74rem}
 @media (prefers-reduced-motion:no-preference){
   details.hit{transition:border-color .15s ease}
 }
@@ -725,10 +743,23 @@ footer b{color:var(--ink-soft); font-weight:600}
       + "유니코드 매핑이 없습니다. 수학·화학·물리처럼 수식이 많은 과목에서 두드러지고, "
       + "국어·영어·사탐은 거의 영향이 없습니다.</p>",
     ];
-    if (DATA.upload){
-      notes.push('<p><a class="orig" href="' + esc(DATA.upload)
-        + '">PDF 추가하기</a> — 올리면 1~2분 뒤 자동 반영됩니다. '
-        + '같은 파일은 알아서 건너뜁니다.</p>');
+    if (DATA.upload || DATA.repo){
+      const r = DATA.repo, rows = [];
+      if (DATA.upload) rows.push(['PDF 올리기', DATA.upload,
+        '끌어다 놓으면 1~2분 뒤 자동 반영 · 같은 파일은 건너뜀']);
+      if (r){
+        rows.push(['파일 정리', r + '/tree/main/pdfs',
+          '연도 폴더 열람 · 이름 바꾸기 · 잘못 올린 파일 삭제']);
+        rows.push(['다시 파싱', r + '/actions/workflows/gichul.yml',
+          'Run workflow 단추 → 전체(force)·특정 연도(target)·지운 파일 반영(prune)']);
+        rows.push(['처리 결과', r + '/blob/main/data/REPORT.md',
+          '방금 올린 파일이 어떻게 읽혔는지 확인']);
+      }
+      notes.push('<div class="admin"><b>관리</b>'
+        + rows.map(x => '<a class="abtn" target="_blank" rel="noopener" href="'
+            + esc(x[1]) + '"><span>' + esc(x[0]) + '</span><small>'
+            + esc(x[2]) + '</small></a>').join('')
+        + '</div>');
     }
     if (!DATA.images && !DATA.pdfjs){
       notes.unshift("<p><b>이 파일에는 지면 이미지가 없습니다.</b> 문항 수가 많아 "
