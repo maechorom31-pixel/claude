@@ -282,14 +282,17 @@ button.go{
 
 /* ── 2단: 기출 | 사전 */
 .cols{display:grid; gap:1.4rem; align-items:start}
-@media (min-width:1100px){
-  .cols{grid-template-columns:minmax(0,1fr) 400px}
-  .dict{position:sticky; top:7rem}
+/* 사전 칸은 좁게 — 검색어가 짧으니 사전은 곁눈질용이고 기출 지면이 주인공이다.
+   사전 사이트는 좁은 폭에서 모바일 판형으로 바뀌어 좁아도 잘 읽힌다. */
+@media (min-width:1000px){
+  .cols{grid-template-columns:minmax(0,1fr) 310px}
+  .dict{position:sticky; top:1rem}
 }
 .dict{border:1px solid var(--rule-strong); border-radius:3px;
   background:var(--card); overflow:hidden}
 .dicthead{display:flex; justify-content:space-between; align-items:baseline;
-  gap:1rem; padding:.6rem .9rem; border-bottom:1px solid var(--rule);
+  flex-wrap:wrap; gap:.3rem .8rem; padding:.6rem .8rem;
+  border-bottom:1px solid var(--rule);
   font-size:.85rem; color:var(--ink-soft)}
 .dicttitle b{color:var(--ink); font-weight:700}
 .dictlinks{display:flex; gap:.8rem; flex-shrink:0}
@@ -303,7 +306,7 @@ button.go{
   display:block; background:transparent}
 .dictfoot{padding:.4rem .9rem; border-top:1px solid var(--rule);
   font-size:.72rem; color:var(--ink-faint)}
-@media (max-width:1099px){ .dict iframe{height:48vh} }
+@media (max-width:999px){ .dict iframe{height:48vh} }
 
 /* ── 결과 */
 .results{display:grid; gap:.8rem; margin-top:.4rem}
