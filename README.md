@@ -114,17 +114,37 @@ python3 -m gichul stats          # 시험지 하나하나
 `subjects` 에 `(미상)` 이 보이면 그 시험지는 과목을 못 읽은 것이다.
 `ingest --subject` 로 지정해 다시 넣으면 된다.
 
-### 계속 쌓는 흐름
+### 계속 쌓는 흐름 — 세 가지 방법
+
+**① GitHub 에 올리기만 하면 끝 (추천 · 설치 불필요)**
+
+이 저장소의 `pdfs/` 폴더에 PDF를 올리면 (GitHub 웹 → Add file → Upload files)
+1~2분 뒤 자동으로 색인되고 검색 페이지가 다시 만들어진다.
 
 ```
-PDF 넣기 → 색인 DB → 검색·용례·지면 보기
-              ↓ 선택
-        JSONL (백업·이사)   HTML (배포·보관)
+pdfs/에 PDF 업로드
+   → 자동 파싱 → data/archive.jsonl.gz 에 누적  (진짜 데이터, MB 단위)
+   → data/REPORT.md 에 처리 결과              (확인할 것은 이것뿐)
+   → site/ 검색 페이지 재생성                  (Pages 주소 또는 Actions 결과물)
 ```
 
-JSONL 과 HTML 은 산출물이지 중간 단계가 아니다. `ingest` 한 번이면 바로 검색된다.
-새 시험지를 받을 때마다 명령을 치는 게 번거로우면 `watch` 로 폴더를 걸어 두고,
-가끔 `export` 로 백업하면 된다.
+- 같은 파일을 두 번 올려도 내용으로 알아보고 건너뛴다.
+- 과목을 못 읽으면 REPORT 에 뜬다. **파일명에 과목을 넣어 이름만 바꾸면**
+  다음 실행에서 채워진다 (내용으로 대조하므로 개명해도 안전).
+- 용량이 차면 오래된 PDF를 지워도 된다. 텍스트·검색·용례는 JSONL 에 남고,
+  그 시험지의 지면 이미지만 빠진다.
+- 검색 페이지를 주소로 쓰려면 한 번만: Settings → Pages → Source 를
+  "GitHub Actions" 로. (비공개 저장소는 유료 요금제에서만 Pages 가 된다 —
+  안 되면 Actions 실행 결과물(Artifacts)에서 zip 으로 받는다.)
+
+**② 내 컴퓨터에서 더블클릭** — `시작.bat`(Windows) / `시작.command`(macOS).
+브라우저가 열리고, 화면에서 PDF를 업로드하면 바로 쌓인다. Python 설치 한 번만
+필요하다.
+
+**③ 명령줄** — `ingest`/`watch`/`export`. 위에서 설명한 대로.
+
+JSONL 과 HTML 은 산출물이지 중간 단계가 아니다. 어느 방법이든 PDF를 넣는
+순간 검색이 된다.
 
 ## 용량
 

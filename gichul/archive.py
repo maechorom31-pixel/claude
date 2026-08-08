@@ -19,7 +19,6 @@ from typing import Iterator
 
 from . import index as idx
 from .meta import ExamMeta
-from .segment import Segment
 
 FORMAT = "gichul-jsonl/1"
 
@@ -37,15 +36,27 @@ def export_jsonl(conn: sqlite3.Connection, path: str) -> int:
     with _open(path, "wt") as f:
         f.write(json.dumps({"format": FORMAT}, ensure_ascii=False) + "\n")
         for e in conn.execute("SELECT * FROM exams ORDER BY id"):
-            segs = conn.execute(
-                "SELECT kind, number, number_end, page, text FROM segments "
-                "WHERE exam_id=? ORDER BY id", (e["id"],)).fetchall()
+            segs = []
+            for s in conn.execute(
+                    "SELECT kind, number, number_end, page, rects, tables, text "
+                    "FROM segments WHERE exam_id=? ORDER BY id", (e["id"],)):
+                d = {"kind": s["kind"], "number": s["number"],
+                     "number_end": s["number_end"], "page": s["page"],
+                     "text": s["text"]}
+                # 좌표·표는 있을 때만 적는다. 이게 빠지면 복원 후
+                # 지면 이미지를 오려낼 수 없다.
+                rects = json.loads(s["rects"] or "[]")
+                if rects:
+                    d["rects"] = rects
+                if s["tables"]:
+                    d["tables"] = json.loads(s["tables"])
+                segs.append(d)
             f.write(json.dumps({
                 "sha1": e["sha1"], "filename": e["filename"], "path": e["path"],
                 "year": e["year"], "exam": e["exam"], "grade": e["grade"],
                 "subject": e["subject"], "n_pages": e["n_pages"],
                 "scanned_pages": e["scanned_pages"],
-                "segments": [dict(s) for s in segs],
+                "segments": segs,
             }, ensure_ascii=False) + "\n")
             n += 1
     return n
@@ -75,8 +86,8 @@ def import_jsonl(conn: sqlite3.Connection, path: str, *, force: bool = False) ->
                 skipped += 1
                 continue
             idx.delete_exam(conn, existing["id"])
-        segs = [Segment(s["kind"], s["number"], s["number_end"], s["page"],
-                        s["text"].split("\n")) for s in rec["segments"]]
+        # dict 그대로 넘긴다. Segment 로 다시 만들면 좌표·표가 사라진다.
+        segs = rec["segments"]
         meta = ExamMeta(year=rec["year"], exam=rec["exam"], grade=rec["grade"],
                         subject=rec["subject"])
         scanned = [int(x) for x in (rec.get("scanned_pages") or "").split(",") if x]

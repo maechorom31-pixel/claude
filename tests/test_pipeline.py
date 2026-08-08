@@ -245,6 +245,17 @@ def test_jsonl_round_trip_without_pdfs():
         assert idx.stats(conn2) == idx.stats(conn)
         assert idx.search(conn2, "빛에너지")
 
+        # 좌표가 왕복을 살아남아야 복원 후에도 지면 이미지를 오릴 수 있다.
+        # (자동 갱신은 매번 JSONL 에서 복원하므로, 이게 깨지면 두 번째
+        # 실행부터 이미지가 조용히 전부 사라진다.)
+        import json as _json
+        rects = [_json.loads(r["rects"] or "[]") for r in
+                 conn2.execute("SELECT rects FROM segments WHERE kind='question'")]
+        assert all(rects), "복원된 문항에 좌표가 없다"
+        hit = idx.search(conn2, "빛에너지")[0]
+        from gichul.render import render_segment
+        assert render_segment(idx.get_segment(conn2, hit.segment_id), 0)[:4] == b"\x89PNG"
+
 
 # ---------------------------------------------------------------- 자립형 HTML
 

@@ -91,7 +91,9 @@ def build(conn: sqlite3.Connection, out_path: str, *,
     for r in rows:
         row = idx.get_segment(conn, r["id"])
         imgs = []
-        if images:
+        # 원본 PDF를 지운 시험지는 텍스트만 담는다. 용량 정리로 PDF를 지워도
+        # 색인 전체가 죽지 않아야 계속 쌓아 갈 수 있다.
+        if images and os.path.exists(row["path"]):
             for part in range(render.segment_parts(row)):
                 jpg = _clip_jpeg(row, part)
                 if jpg:

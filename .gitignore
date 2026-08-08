@@ -6,3 +6,6 @@ __pycache__/
 samples/
 *.jsonl
 *.jsonl.gz
+!data/archive.jsonl.gz
+site/
+pdfs/**/*.pdf.part

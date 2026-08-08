@@ -144,7 +144,7 @@ def delete_exam(conn: sqlite3.Connection, exam_id: int) -> None:
 
 def add_exam(conn: sqlite3.Connection, *, sha1: str, path: str, meta: ExamMeta,
              segments, n_pages: int, scanned_pages: list[int]) -> int:
-    n_q = sum(1 for s in segments if s.kind == "question")
+    n_q = sum(1 for s in segments if _seg_kind(s) == "question")
     cur = conn.execute(
         """INSERT INTO exams(sha1, path, filename, year, exam, grade, subject,
                              n_pages, n_questions, scanned_pages, ingested_at)
@@ -158,13 +158,28 @@ def add_exam(conn: sqlite3.Connection, *, sha1: str, path: str, meta: ExamMeta,
         """INSERT INTO segments(exam_id, kind, number, number_end, page,
                                rects, tables, text)
            VALUES(?,?,?,?,?,?,?,?)""",
-        [(exam_id, s.kind, s.number, s.number_end, s.page,
-          json.dumps([list(r) for r in s.rects()]),
-          json.dumps(s.tables, ensure_ascii=False) if s.tables else None,
-          s.text) for s in segments],
+        [(exam_id, *_seg_row(s)) for s in segments],
     )
     conn.commit()
     return exam_id
+
+
+def _seg_kind(s) -> str:
+    return s["kind"] if isinstance(s, dict) else s.kind
+
+
+def _seg_row(s) -> tuple:
+    """세그먼트 한 줄. 새로 파싱한 Segment 객체와 JSONL 에서 복원한 dict 를
+    모두 받는다 — 복원본은 좌표·표를 이미 계산된 값 그대로 보존해야 한다."""
+    if isinstance(s, dict):
+        return (s["kind"], s.get("number"), s.get("number_end"), s.get("page"),
+                json.dumps(s.get("rects") or []),
+                json.dumps(s["tables"], ensure_ascii=False) if s.get("tables") else None,
+                s["text"])
+    return (s.kind, s.number, s.number_end, s.page,
+            json.dumps([list(r) for r in s.rects()]),
+            json.dumps(s.tables, ensure_ascii=False) if s.tables else None,
+            s.text)
 
 
 def _row_meta(row: sqlite3.Row) -> ExamMeta:
