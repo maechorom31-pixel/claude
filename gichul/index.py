@@ -19,7 +19,7 @@ from .meta import ExamMeta, canon_subject, subject_aliases
 from .normalize import OBJ, FOLD_MAP, STRIPPED_SPACES, find_spans, query_key, readable
 
 DEFAULT_DB = os.environ.get("GICHUL_DB", os.path.expanduser("~/.gichul/index.db"))
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _sql_str(s: str) -> str:
@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS segments(
   exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
   kind TEXT NOT NULL,
   number INTEGER, number_end INTEGER, page INTEGER,
+  part TEXT,                        -- 선택과목 구획 (미적분, 언어와 매체 …)
   rects TEXT,                       -- 원본 PDF 좌표 [[page,x0,y0,x1,y1], ...]
   tables TEXT,                      -- 문항에 딸린 표 [[[셀,...],...], ...]
   text TEXT NOT NULL,
@@ -156,8 +157,8 @@ def add_exam(conn: sqlite3.Connection, *, sha1: str, path: str, meta: ExamMeta,
     exam_id = int(cur.lastrowid)
     conn.executemany(
         """INSERT INTO segments(exam_id, kind, number, number_end, page,
-                               rects, tables, text)
-           VALUES(?,?,?,?,?,?,?,?)""",
+                               part, rects, tables, text)
+           VALUES(?,?,?,?,?,?,?,?,?)""",
         [(exam_id, *_seg_row(s)) for s in segments],
     )
     conn.commit()
@@ -173,10 +174,11 @@ def _seg_row(s) -> tuple:
     모두 받는다 — 복원본은 좌표·표를 이미 계산된 값 그대로 보존해야 한다."""
     if isinstance(s, dict):
         return (s["kind"], s.get("number"), s.get("number_end"), s.get("page"),
+                s.get("part"),
                 json.dumps(s.get("rects") or []),
                 json.dumps(s["tables"], ensure_ascii=False) if s.get("tables") else None,
                 s["text"])
-    return (s.kind, s.number, s.number_end, s.page,
+    return (s.kind, s.number, s.number_end, s.page, s.part,
             json.dumps([list(r) for r in s.rects()]),
             json.dumps(s.tables, ensure_ascii=False) if s.tables else None,
             s.text)
@@ -188,10 +190,11 @@ def _row_meta(row: sqlite3.Row) -> ExamMeta:
 
 
 def _label(row: sqlite3.Row) -> str:
+    head = f"{row['part']} " if row["part"] else ""
     if row["kind"] == "question":
-        return f"{row['number']}번"
+        return f"{head}{row['number']}번"
     if row["kind"] == "passage":
-        return f"{row['number']}~{row['number_end']}번 지문"
+        return f"{head}{row['number']}~{row['number_end']}번 지문"
     return "표지/안내"
 
 

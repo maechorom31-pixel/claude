@@ -38,11 +38,13 @@ def export_jsonl(conn: sqlite3.Connection, path: str) -> int:
         for e in conn.execute("SELECT * FROM exams ORDER BY id"):
             segs = []
             for s in conn.execute(
-                    "SELECT kind, number, number_end, page, rects, tables, text "
+                    "SELECT kind, number, number_end, page, part, rects, tables, text "
                     "FROM segments WHERE exam_id=? ORDER BY id", (e["id"],)):
                 d = {"kind": s["kind"], "number": s["number"],
                      "number_end": s["number_end"], "page": s["page"],
                      "text": s["text"]}
+                if s["part"]:
+                    d["part"] = s["part"]
                 # 좌표·표는 있을 때만 적는다. 이게 빠지면 복원 후
                 # 지면 이미지를 오려낼 수 없다.
                 rects = json.loads(s["rects"] or "[]")

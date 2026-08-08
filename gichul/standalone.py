@@ -129,6 +129,7 @@ def build(conn: sqlite3.Connection, out_path: str, *,
             "src": idx.segment_source(row),
             "subject": row["subject"],
             "num": row["number"],
+            "part": row["part"],
             "page": row["page"],
             "text": row["text"],
             "tables": idx.tables_of(row),
@@ -587,7 +588,8 @@ footer b{color:var(--ink-soft); font-weight:600}
       }).join("");
 
       return '<details class="hit"><summary class="head">'
-        + '<span class="src"><span class="qno">' + it.num + '번</span>'
+        + '<span class="src"><span class="qno">'
+        + (it.part ? esc(it.part) + ' ' : '') + it.num + '번</span>'
         + '<span class="srctext">' + esc(it.src) + "</span>"
         + '<span class="where">p.' + it.page + "</span></span>"
         + '<span class="snip">' + snippet(it.text, h.spans, 55) + "</span>"
