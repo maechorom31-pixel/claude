@@ -32,6 +32,10 @@ on:
         description: "저장소에서 지운 PDF는 색인에서도 뺀다 (잘못 올린 것 정리)"
         type: boolean
         default: false
+      target:
+        description: "이 연도(폴더·파일명 접두어)만 다시 파싱 (예: 2027)"
+        type: string
+        default: ""
 
 concurrency:
   group: gichul-update
@@ -59,6 +63,7 @@ jobs:
         env:
           GICHUL_FORCE: ${{ inputs.force && '1' || '0' }}
           GICHUL_PRUNE: ${{ inputs.prune && '1' || '0' }}
+          GICHUL_TARGET: ${{ inputs.target }}
         run: python scripts/ci_update.py
 
       - name: 데이터 커밋 (archive.jsonl.gz + REPORT.md)

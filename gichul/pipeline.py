@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from dataclasses import dataclass
 
@@ -23,6 +24,15 @@ class IngestResult:
     scanned_pages: list[int] | None = None
     warnings: list[str] | None = None
     error: str | None = None
+
+
+def _year_from_dirs(path: str) -> int | None:
+    """상위 폴더 이름이 연도면 그걸 쓴다. `pdfs/2019/….pdf` 처럼 연도별로
+    정리해 올리는 경우, 파일명·표지 판독이 모두 놓친 연도의 마지막 보루다."""
+    for part in reversed(os.path.dirname(os.path.abspath(path)).split(os.sep)):
+        if re.fullmatch(r"(19|20)\d{2}", part):
+            return int(part)
+    return None
 
 
 def _meta_text(segments: list[Segment], full_text: str) -> str:
@@ -92,7 +102,8 @@ def ingest_file(conn: sqlite3.Connection, path: str, *,
         pin = ExamMeta(subject=fm.subject, subject_raw=fm.subject_raw) \
             if fm.explicit else ExamMeta()
         meta = merge(overrides or ExamMeta(), pin,
-                     from_text(_meta_text(segs, ex.text)), fm)
+                     from_text(_meta_text(segs, ex.text)), fm,
+                     ExamMeta(year=_year_from_dirs(path)))
 
         if existing:
             idx.delete_exam(conn, existing["id"])

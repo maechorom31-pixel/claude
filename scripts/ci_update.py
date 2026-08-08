@@ -29,6 +29,7 @@ sys.path.insert(0, ROOT)
 from gichul import index as idx                    # noqa: E402
 from gichul.archive import export_jsonl, import_jsonl   # noqa: E402
 from gichul.meta import from_filename              # noqa: E402
+from gichul.pipeline import _year_from_dirs        # noqa: E402
 from gichul.pipeline import ingest_paths           # noqa: E402
 from gichul.standalone import build                # noqa: E402
 
@@ -67,6 +68,8 @@ def repair_meta_from_filenames(conn, pdf_dir: str) -> list[tuple[str, dict]]:
                          (abspath, os.path.basename(path), row["id"]))
 
         fm = from_filename(os.path.basename(path))
+        if fm.year is None:
+            fm.year = _year_from_dirs(path)
         updates = {}
         for field in ("year", "exam", "grade", "subject"):
             if row[field] is None and getattr(fm, field):
@@ -82,6 +85,17 @@ def repair_meta_from_filenames(conn, pdf_dir: str) -> list[tuple[str, dict]]:
             fixed.append((os.path.basename(path), updates))
     conn.commit()
     return fixed
+
+
+def target_files(pdf_dir: str, target: str) -> list[str]:
+    """연도별 재파싱 대상: 폴더 이름이 target 이거나 파일명이 target 으로 시작."""
+    out = []
+    for path in _pdfs(pdf_dir):
+        rel = os.path.relpath(path, pdf_dir)
+        parts = rel.split(os.sep)
+        if target in parts[:-1] or parts[-1].startswith(target):
+            out.append(path)
+    return out
 
 
 def prune_missing(conn, enabled: bool) -> list[str]:
@@ -206,6 +220,26 @@ def _copy_pdfs_into_site(pdf_dir: str, site_dir: str) -> int:
     return n
 
 
+_PDFJS_VERSION = "3.11.174"
+
+
+def fetch_pdfjs(site_dir: str) -> bool:
+    """pdf.js 를 사이트에 싣는다. 실패하면 False — 그땐 예전처럼 이미지를 굽는다."""
+    import urllib.request
+    vendor = os.path.join(site_dir, "vendor")
+    os.makedirs(vendor, exist_ok=True)
+    base = f"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/{_PDFJS_VERSION}/"
+    for fname in ("pdf.min.js", "pdf.worker.min.js"):
+        dst = os.path.join(vendor, fname)
+        if os.path.exists(dst) and os.path.getsize(dst) > 10_000:
+            continue
+        try:
+            urllib.request.urlretrieve(base + fname, dst)
+        except Exception:                          # noqa: BLE001
+            return False
+    return True
+
+
 def build_site(conn, site_dir: str, pdf_dir: str) -> list[str]:
     """첫 화면 = 검색 페이지 하나.
 
@@ -220,11 +254,16 @@ def build_site(conn, site_dir: str, pdf_dir: str) -> list[str]:
         if n:
             notes.append(f"원본 PDF {n}개를 사이트에 실음")
 
+    # 지면은 pdf.js 로 열 때 오려 그린다. 이미지를 미리 구우면 문항 수백 개에서
+    # 페이지가 수십 MB가 되어 예산에 걸리고, 그때부터 지면이 사라져 보였다.
+    use_pdfjs = fetch_pdfjs(site_dir)
     r = build(conn, os.path.join(site_dir, "index.html"),
               max_mb=PAGE_BUDGET_MB, pdf_base_url="pdfs", pdf_root=pdf_dir,
-              upload_url=_upload_url())
-    notes.append(f"index.html: 문항 {r['questions']} / {r['size']/2**20:.1f}MB"
-                 + ("" if r["images"] else " (지면 이미지 없이 — 원본 PDF 링크로 봄)"))
+              upload_url=_upload_url(), pdfjs=use_pdfjs,
+              images=False if use_pdfjs else None)
+    mode = "지면은 열 때 PDF에서 그림" if use_pdfjs else (
+        "이미지 내장" if r["images"] else "이미지 없음 · PDF 링크만")
+    notes.append(f"index.html: 문항 {r['questions']} / {r['size']/2**20:.1f}MB ({mode})")
     return notes
 
 
@@ -283,6 +322,13 @@ def main() -> int:
         results = []
         if os.path.isdir(pdf_dir):
             results = ingest_paths(conn, [pdf_dir], force=force)
+            # 특정 연도(폴더)만 처음부터 다시 파싱 — 그 연도에서 이상을
+            # 발견했을 때 전체를 건드리지 않고 고치는 관리 스위치다.
+            target = os.environ.get("GICHUL_TARGET", "").strip()
+            if target and not force:
+                picked = target_files(pdf_dir, target)
+                print(f"대상 재파싱: '{target}' → {len(picked)}개 파일")
+                results += ingest_paths(conn, picked, force=True)
         fixed = repair_meta_from_filenames(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
         pruned = prune_missing(conn, os.environ.get("GICHUL_PRUNE") == "1")
         if pruned:
