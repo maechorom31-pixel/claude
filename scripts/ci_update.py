@@ -161,11 +161,13 @@ def prune_missing(conn, enabled: bool) -> list[str]:
     기본 동작은 '지워도 데이터는 남는다'(용량 정리용)이므로, 잘못 올린 파일을
     치우고 싶을 때만 수동 실행에서 켠다.
     """
-    if not enabled:
-        return []
-    gone = [(r["id"], r["filename"]) for r in
-            conn.execute("SELECT id, filename, path FROM exams")
+    gone = [(r["id"], r["filename"], r["n_questions"]) for r in
+            conn.execute("SELECT id, filename, path, n_questions FROM exams")
             if not os.path.exists(r["path"])]
+    # 문항이 하나도 없는 시험지(스캔본 등)는 원본이 사라지면 남길 이유가
+    # 없다 — prune 을 켜지 않아도 자동으로 뺀다. 문항이 있는 시험지는
+    # '지워도 데이터는 남는다'는 기본 약속대로 prune 을 켤 때만 뺀다.
+    gone = [(i, n) for i, n, q in gone if enabled or not q]
     for exam_id, _name in gone:
         idx.delete_exam(conn, exam_id)
     return [name for _id, name in gone]
@@ -202,7 +204,7 @@ def write_report(conn, path: str, results, fixed, pruned=(), moved=()) -> None:
         lines.append("")
 
     if pruned:
-        lines.append("## 색인에서 뺀 시험지 (원본 PDF 삭제됨, prune 실행)")
+        lines.append("## 색인에서 뺀 시험지 (원본 PDF 삭제됨)")
         lines.append("")
         for name in pruned:
             lines.append(f"- `{name}`")

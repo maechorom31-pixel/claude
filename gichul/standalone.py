@@ -572,12 +572,11 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
   }
 
   const RENDER_CAP = 200;   // 카드 수천 장을 그리면 그리기 자체가 1초를 넘긴다
+  const FIRST_CHUNK = 40;   // 먼저 이만큼만 그려 입력이 막히지 않게 한다
+  const byId = new Map(DATA.items.map(i => [i.id, i]));
+  let renderGen = 0;
 
-  function renderResults(hits){
-    if (!hits.length) return;
-    const shown = hits.slice(0, RENDER_CAP);
-    const more = hits.length - shown.length;
-    elResults.innerHTML = shown.map(h => {
+  function cardHTML(h){
       const it = h.it;
       const imgs = it.imgs.map((_, i) =>
         '<img class="clip" data-src="' + i + '" data-id="' + it.id
@@ -621,12 +620,12 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
             : '<p class="rowlabel">추출된 텍스트</p><pre class="raw">'
               + esc(readable(it.text)) + "</pre>")
         + "</div></details>";
-    }).join("") + (more ? '<p class="empty">' + more
-      + '개 문항이 더 있습니다. 검색어를 좁히거나 과목을 고르세요.</p>' : "");
+  }
 
-    // 이미지는 열 때 붙인다. 한꺼번에 그리면 첫 화면이 느려진다.
-    const byId = new Map(DATA.items.map(i => [i.id, i]));
-    elResults.querySelectorAll("details.hit").forEach(d => {
+  // 이미지는 열 때 붙인다. 한꺼번에 그리면 첫 화면이 느려진다.
+  function armCards(){
+    elResults.querySelectorAll("details.hit:not([data-armed])").forEach(d => {
+      d.dataset.armed = "1";
       d.addEventListener("toggle", () => {
         if (!d.open) return;
         d.querySelectorAll("img.clip[data-src]").forEach(img => {
@@ -641,6 +640,28 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
         });
       });
     });
+  }
+
+  function renderResults(hits){
+    if (!hits.length) return;
+    const gen = ++renderGen;
+    const shown = hits.slice(0, RENDER_CAP);
+    const more = hits.length - shown.length;
+    const tail = more ? '<p class="empty">' + more
+      + '개 문항이 더 있습니다. 검색어를 좁히거나 과목을 고르세요.</p>' : "";
+    const rest = shown.slice(FIRST_CHUNK);
+    // 앞부분만 바로 그리고 나머지는 다음 틈에 — 타자 중에도 화면이 안 굳는다.
+    elResults.innerHTML = shown.slice(0, FIRST_CHUNK).map(cardHTML).join("")
+      + (rest.length ? "" : tail);
+    armCards();
+    if (rest.length){
+      setTimeout(() => {
+        if (gen !== renderGen) return;      // 그 사이 새 검색이 갈아엎었다
+        elResults.insertAdjacentHTML("beforeend",
+          rest.map(cardHTML).join("") + tail);
+        armCards();
+      }, 30);
+    }
   }
 
   // ── PDF에서 문항 오려 그리기 (pdf.js) ─────────────────────────────
@@ -782,7 +803,10 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
         load.style.display = "flex";
         f.onload = () => {
           load.style.display = "none";
-          if (typing) elQ.focus({preventScroll: true});
+          // 한글 조합 중에 focus() 를 다시 부르면 조합 중이던 글자가 깨진다.
+          // 커서를 실제로 빼앗겼을 때만, 조합 중이 아닐 때만 되돌린다.
+          if (typing && document.activeElement !== elQ && !composing)
+            elQ.focus({preventScroll: true});
         };
         f.src = url + "#content";
         f.dataset.q = query;
@@ -793,12 +817,16 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
     }, 700);
   }
 
+  let lastState = null;
   function run(){
     const query = elQ.value.trim();
+    const state = query + "|" + (subject || "");
+    if (state === lastState) return;      // 같은 검색을 다시 그릴 이유가 없다
+    lastState = state;
     const hits = query ? search(query, subject) : [];
     if (!query){
       elSummary.innerHTML = "";
-      elResults.innerHTML = '<p class="empty">위에 낱말을 넣거나 예시를 눌러 보세요.</p>';
+      elResults.innerHTML = '<p class="empty">위 칸에 낱말을 넣어 보세요.</p>';
       return;
     }
     curQuery = query;
@@ -819,10 +847,7 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
     const subs = Object.keys(DATA.counts);
     document.getElementById("lede").innerHTML =
       (span ? esc(span) + " " : "") + "평가원 기출 <b>" + n + "문항</b> · 시험지 "
-      + papers.length + "개. 띄어쓰기가 달라도 찾고(<code>빛에너지</code> = "
-      + "<code>빛 에너지</code>), 표기 빈도를 세고, 옆에 표준국어대사전이 함께 뜹니다."
-      + ((DATA.images || DATA.pdfjs)
-          ? " 문항을 누르면 원본 지면이 나옵니다." : "");
+      + papers.length + "개";
 
     const notes = [
       "<p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어 "
@@ -920,10 +945,15 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
     }
   });
 
+  // 한글 IME 조합 상태. 조합 중에는 검색창을 건드리지 않기 위한 표시.
+  let composing = false;
+  elQ.addEventListener("compositionstart", () => { composing = true; });
+  elQ.addEventListener("compositionend", () => { composing = false; });
+
   let pending = null;
   elQ.addEventListener("input", () => {
     clearTimeout(pending);
-    pending = setTimeout(run, 120);
+    pending = setTimeout(run, 150);
   });
 
   run();
