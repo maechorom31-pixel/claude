@@ -244,6 +244,12 @@ def from_filename(name: str) -> ExamMeta:
             meta.exam = "모의평가"
         elif "학평" in t or "학력" in t:
             meta.exam = "학력평가"
+        else:
+            # `2025_9월_경제` 처럼 달만 적은 이름. 평가원 기출에서 6·9월은
+            # 모평뿐이다. (3·7월 같은 학평 달은 넘겨짚지 않는다.)
+            mb = re.search(r"(?<![0-9])([69])\s*월(?![가-힣0-9])", t)
+            if mb:
+                meta.exam = f"{mb.group(1)}월 모평"
 
     g = _GRADE.search(t)
     if g:
