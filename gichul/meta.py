@@ -141,7 +141,8 @@ def canon_subject(s: str | None) -> str | None:
     s = "".join(_ROMAN.get(ch, ch) for ch in s)
     s = re.sub(r"\s+", "", s).strip("()[]<>")
     # `사회·문화` 와 `사회문화` 는 같은 과목이다. 가운뎃점 표기를 없앤다.
-    s = re.sub(r"[·‧・･]", "", s)
+    # 파일명에는 가운뎃점 대신 마침표를 쓰기도 한다 (`사회.문화`).
+    s = re.sub(r"[·‧・･.．]", "", s)
     s = s.replace("영역", "").replace("과목", "")
     for stem in _NUMBERED_STEMS:
         m = re.fullmatch(rf"{stem}\s*([12])", s)

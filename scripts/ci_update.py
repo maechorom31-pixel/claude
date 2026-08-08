@@ -99,17 +99,24 @@ def sort_into_year_folders(conn, pdf_dir: str) -> list[tuple[str, str]]:
         src = os.path.join(pdf_dir, name)
         if not (os.path.isfile(src) and name.lower().endswith(".pdf")):
             continue
-        row = idx.already_indexed(conn, idx.file_sha1(src))
+        sha1 = idx.file_sha1(src)
+        row = idx.already_indexed(conn, sha1)
         year = row["year"] if row else from_filename(name).year
         if not year:
             continue                     # 연도를 모르면 그대로 둔다 — REPORT 에 미상으로 뜬다
         dst_dir = os.path.join(pdf_dir, str(year))
         dst = os.path.join(dst_dir, name)
         if os.path.exists(dst):
-            continue                     # 같은 이름이 이미 있으면 건드리지 않는다
+            # 이미 들어간 파일을 또 올린 경우: 내용까지 같으면 루트 쪽을
+            # 지워서 중복이 쌓이지 않게 한다. 내용이 다르면 사람이 봐야
+            # 하는 상황이므로 건드리지 않는다.
+            if idx.file_sha1(dst) == sha1:
+                os.remove(src)
+                moved.append((name, f"`pdfs/{year}/` 에 이미 있음 · 중복 제거"))
+            continue
         os.makedirs(dst_dir, exist_ok=True)
         os.rename(src, dst)
-        moved.append((name, str(year)))
+        moved.append((name, f"`pdfs/{year}/` 로 이동"))
     return moved
 
 
@@ -166,8 +173,8 @@ def write_report(conn, path: str, results, fixed, pruned=(), moved=()) -> None:
     if moved:
         lines.append("## 연도 폴더로 정리")
         lines.append("")
-        for name, year in moved:
-            lines.append(f"- `{name}` → `pdfs/{year}/`")
+        for name, what in moved:
+            lines.append(f"- `{name}` → {what}")
         lines.append("")
 
     if pruned:
