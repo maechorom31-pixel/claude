@@ -132,11 +132,20 @@ def sort_into_year_folders(conn, pdf_dir: str) -> list[tuple[str, str]]:
         dst = os.path.join(dst_dir, name)
         if os.path.exists(dst):
             # 이미 들어간 파일을 또 올린 경우: 내용까지 같으면 루트 쪽을
-            # 지워서 중복이 쌓이지 않게 한다. 내용이 다르면 사람이 봐야
-            # 하는 상황이므로 건드리지 않는다.
+            # 지워서 중복이 쌓이지 않게 한다.
             if idx.file_sha1(dst) == sha1:
                 os.remove(src)
                 moved.append((name, f"`pdfs/{year}/` 에 이미 있음 · 중복 제거"))
+                continue
+            # 내용이 다른 같은 이름: 자리를 차지한 쪽이 글자 없는 스캔본이고
+            # 새로 올린 쪽은 문항이 읽혔다면, 좋은 판으로 갈아 끼운다.
+            # 그 밖의 경우는 사람이 봐야 하므로 건드리지 않는다.
+            drow = idx.already_indexed(conn, idx.file_sha1(dst))
+            if drow is not None and row is not None \
+                    and not drow["n_questions"] and row["n_questions"]:
+                os.remove(dst)
+                os.rename(src, dst)
+                moved.append((name, f"`pdfs/{year}/` 의 스캔본을 글자 있는 판으로 교체"))
             continue
         os.makedirs(dst_dir, exist_ok=True)
         os.rename(src, dst)
@@ -153,6 +162,32 @@ def target_files(pdf_dir: str, target: str) -> list[str]:
         if target in parts[:-1] or parts[-1].startswith(target):
             out.append(path)
     return out
+
+
+def replace_scanned(conn, pdf_dir: str) -> list[str]:
+    """같은 시험지(연도·시험·과목)가 글자 있는 판과 글자 없는 판으로 둘 다
+    있으면 글자 없는 쪽(스캔본)의 PDF와 색인을 지운다.
+
+    OCR 안 된 파일을 올렸다가 나중에 제대로 된 판을 올리는 흐름을 자동으로
+    마무리한다. 문항이 하나라도 읽힌 시험지는 절대 지우지 않는다.
+    """
+    removed = []
+    rows = conn.execute(
+        """SELECT a.id, a.path, a.filename, a.sha1 FROM exams a
+           WHERE a.n_questions = 0
+             AND a.year IS NOT NULL AND a.subject IS NOT NULL
+             AND EXISTS (SELECT 1 FROM exams b
+                         WHERE b.n_questions > 0 AND b.id != a.id
+                           AND b.year = a.year AND b.exam IS a.exam
+                           AND b.subject = a.subject)""").fetchall()
+    for r in rows:
+        # 경로만 믿고 지우면 안 된다 — 같은 이름 자리에 이미 좋은 판이
+        # 갈아 끼워져 있을 수 있다. 내용(sha1)까지 스캔본일 때만 지운다.
+        if os.path.isfile(r["path"]) and idx.file_sha1(r["path"]) == r["sha1"]:
+            os.remove(r["path"])
+        idx.delete_exam(conn, r["id"])
+        removed.append(r["filename"])
+    return removed
 
 
 def prune_missing(conn, enabled: bool) -> list[str]:
@@ -173,7 +208,8 @@ def prune_missing(conn, enabled: bool) -> list[str]:
     return [name for _id, name in gone]
 
 
-def write_report(conn, path: str, results, fixed, pruned=(), moved=()) -> None:
+def write_report(conn, path: str, results, fixed, pruned=(), moved=(),
+                 swapped=()) -> None:
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
     lines = ["# 기출 색인 처리 결과", "", f"갱신: {now} (한국 시간)", ""]
 
@@ -201,6 +237,15 @@ def write_report(conn, path: str, results, fixed, pruned=(), moved=()) -> None:
         lines.append("")
         for name, what in moved:
             lines.append(f"- `{name}` → {what}")
+        lines.append("")
+
+    if swapped:
+        lines.append("## 스캔본 교체")
+        lines.append("")
+        lines.append("같은 시험의 글자 있는 판이 들어와, 글자를 못 읽던 파일을 지웠습니다.")
+        lines.append("")
+        for name in swapped:
+            lines.append(f"- `{name}`")
         lines.append("")
 
     if pruned:
@@ -434,6 +479,10 @@ def main() -> int:
         moved = swept + moved
         fixed = repair_meta_from_filenames(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
 
+        swapped = replace_scanned(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
+        if swapped:
+            print(f"정리: 글자 있는 판이 들어와 스캔본 {len(swapped)}개 제거")
+
         # 파서가 좋아졌으면(PARSER_VERSION 인상) 옛 버전으로 파싱된 시험지를
         # 알아서 다시 파싱한다. force 를 손으로 켤 필요가 없다.
         if not force:
@@ -453,7 +502,7 @@ def main() -> int:
               f"({os.path.getsize(archive)/2**20:.2f}MB)")
 
         write_report(conn, os.path.join(data_dir, "REPORT.md"), results, fixed,
-                     pruned, moved)
+                     pruned, moved, swapped)
         print(f"보고서: {os.path.join(data_dir, 'REPORT.md')}")
 
         if idx.stats(conn)["exams"]:
