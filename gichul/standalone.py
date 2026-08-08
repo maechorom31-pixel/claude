@@ -49,7 +49,7 @@ def build(conn: sqlite3.Connection, out_path: str, *,
           exam: str | None = None, images: bool | None = None,
           max_mb: float = DEFAULT_MAX_MB,
           pdf_base_url: str | None = None, pdf_root: str | None = None,
-          upload_url: str | None = None) -> dict:
+          upload_url: str | None = None, pdfjs: bool = False) -> dict:
     """자립형 HTML을 쓰고 요약을 돌려준다.
 
     images=None 이면 예산(max_mb)에 맞는지 보고 알아서 정한다.
@@ -58,6 +58,10 @@ def build(conn: sqlite3.Connection, out_path: str, *,
 
     pdf_base_url + pdf_root 를 주면 각 문항에 원본 PDF 링크가 붙는다.
     (pdf_root 아래에 실제로 존재하는 파일만. 예: GitHub blob 주소)
+
+    pdfjs=True 면 지면 이미지를 페이지에 굽지 않는다. 대신 문항 좌표를 실어,
+    문항을 열 때 사이트에 실린 PDF에서 그 부분만 브라우저가 오려 그린다
+    (site/vendor/pdf.min.js 필요). 몇만 문항이 되어도 페이지가 안 커진다.
     """
     from urllib.parse import quote
 
@@ -100,7 +104,7 @@ def build(conn: sqlite3.Connection, out_path: str, *,
         imgs = []
         # 원본 PDF를 지운 시험지는 텍스트만 담는다. 용량 정리로 PDF를 지워도
         # 색인 전체가 죽지 않아야 계속 쌓아 갈 수 있다.
-        if images and os.path.exists(row["path"]):
+        if images and not pdfjs and os.path.exists(row["path"]):
             for part in range(render.segment_parts(row)):
                 jpg = _clip_jpeg(row, part)
                 if jpg:
@@ -114,9 +118,13 @@ def build(conn: sqlite3.Connection, out_path: str, *,
                 rel = "/".join(quote(seg) for seg in rel.split(os.sep))
                 pdf_url = f"{pdf_base_url}/{rel}"
 
+        rects = [[int(r[0])] + [round(v, 1) for v in r[1:]]
+                 for r in render.rects_of(row)] if pdfjs and pdf_url else None
+
         items.append({
             "id": row["id"],
             "pdf": pdf_url,
+            "rects": rects,
             "src": idx.segment_source(row),
             "subject": row["subject"],
             "num": row["number"],
@@ -132,17 +140,23 @@ def build(conn: sqlite3.Connection, out_path: str, *,
 
     data = {"papers": list(papers.values()), "items": items, "counts": counts,
             "order": sorted(counts, key=subject_sort_key),
-            "upload": upload_url, "images": bool(images)}
+            "upload": upload_url, "images": bool(images), "pdfjs": bool(pdfjs)}
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
-    html = _TEMPLATE.replace("/*__DATA__*/", "window.GICHUL=" + payload + ";")
+    pdfjs_tags = ('<script src="vendor/pdf.min.js"></script>'
+                  "<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions"
+                  ".workerSrc='vendor/pdf.worker.min.js';</script>") if pdfjs else ""
+    html = _TEMPLATE.replace("<!--__PDFJS__-->", pdfjs_tags)
+    html = html.replace("/*__DATA__*/", "window.GICHUL=" + payload + ";")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
     return {"questions": len(items), "papers": len(papers), "images": bool(images),
             "image_bytes": total_bytes, "size": os.path.getsize(out_path)}
 
 
-_TEMPLATE = r"""<title>기출 용례 검색</title>
+_TEMPLATE = r"""<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>기출 용례 검색</title>
 <style>
 /* ── 팔레트: 시험지 지면에서 가져왔다.
       바탕은 인쇄 용지, 글자는 잉크, 강조는 형광펜 연두, 소수 표기는 첨삭 빨강. */
@@ -286,9 +300,9 @@ summary.head:hover{background:var(--sunken)}
 .snip mark{background:var(--mark); color:var(--mark-ink); padding:0 .1em; border-radius:0}
 .body{padding:0 .95rem 1.1rem; border-top:1px solid var(--rule)}
 .body .rowlabel{margin-top:1rem}
-img.clip{
+img.clip,canvas.clip{
   display:block; max-width:100%; height:auto; background:#fff;
-  border:1px solid var(--rule); border-radius:1px;
+  border:1px solid var(--rule); border-radius:1px; margin-bottom:.4rem;
 }
 .tblwrap{overflow-x:auto}
 table{border-collapse:collapse; font-size:.86rem; font-variant-numeric:tabular-nums}
@@ -315,7 +329,7 @@ footer b{color:var(--ink-soft); font-weight:600}
 </style>
 
 <div class="wrap">
-  <p class="eyebrow">평가원·교육청 기출</p>
+  <p class="eyebrow">평가원 기출</p>
   <h1>기출 <span class="hl">용례</span> 검색</h1>
   <p class="lede" id="lede"></p>
 
@@ -335,6 +349,7 @@ footer b{color:var(--ink-soft); font-weight:600}
   <footer id="foot"></footer>
 </div>
 
+<!--__PDFJS__-->
 <script>
 /*__DATA__*/
 </script>
@@ -441,8 +456,8 @@ footer b{color:var(--ink-soft); font-weight:600}
     if (!hits.length){
       elSummary.innerHTML = "";
       elResults.innerHTML = '<p class="empty">‘' + esc(query)
-        + '’ 는 이 4과목에 없습니다. <code>옳은것만을</code>, <code>마그마</code>'
-        + ' 같은 낱말로 해 보세요.</p>';
+        + '’ 는 없습니다. 띄어쓰기는 무시하고 찾으니, 표기가 아니라 낱말 자체가'
+        + ' 기출에 없는 것입니다.</p>';
       return;
     }
     const v = variants(hits);
@@ -495,6 +510,11 @@ footer b{color:var(--ink-soft); font-weight:600}
       const imgs = it.imgs.map((_, i) =>
         '<img class="clip" data-src="' + i + '" data-id="' + it.id
         + '" alt="' + esc(it.src) + ' 지면">').join("");
+      // pdf.js 모드: 이미지를 미리 굽는 대신, 열 때 PDF에서 오려 그릴 자리
+      const live = (!imgs && DATA.pdfjs && window.pdfjsLib && it.pdf
+                    && it.rects && it.rects.length)
+        ? '<div class="clips" data-id="' + it.id + '"></div>' : "";
+      const visual = imgs || live;
       const tables = (it.tables || []).map(tb => {
         const ncol = Math.max.apply(null, tb.map(r => r.length));
         const rows = tb.map((r, ri) => {
@@ -513,7 +533,7 @@ footer b{color:var(--ink-soft); font-weight:600}
         + '<span class="where">p.' + it.page + "</span></span>"
         + '<span class="snip">' + snippet(it.text, h.spans, 55) + "</span>"
         + "</summary><div class='body'>"
-        + (imgs ? '<p class="rowlabel">원본 지면</p>' + imgs : "")
+        + (visual ? '<p class="rowlabel">원본 지면</p>' + (imgs || live) : "")
         + (it.pdf ? '<p class="sub"><a class="orig" target="_blank" rel="noopener" href="'
             + esc(it.pdf) + '#page=' + it.page
             + '">원본 PDF에서 이 쪽 펼치기 (p.' + it.page + ')</a></p>' : "")
@@ -521,7 +541,7 @@ footer b{color:var(--ink-soft); font-weight:600}
         // 지면 이미지가 있으면 추출 텍스트는 접어 둔다. 원문이 그대로 보이는데
         // 깨진 수식이 섞인 텍스트를 나란히 펼칠 이유가 없다. 복사할 일이 있을
         // 때만 열면 된다.
-        + (imgs
+        + (visual
             ? "<details class='rawtoggle'><summary class='rowlabel'>추출된 텍스트"
               + " 펼치기 (복사용)</summary><pre class='raw'>"
               + esc(readable(it.text)) + "</pre></details>"
@@ -541,8 +561,63 @@ footer b{color:var(--ink-soft); font-weight:600}
           img.src = it.imgs[Number(img.dataset.src)];
           img.removeAttribute("data-src");
         });
+        d.querySelectorAll(".clips[data-id]").forEach(box => {
+          const it = byId.get(Number(box.dataset.id));
+          box.removeAttribute("data-id");
+          drawClips(box, it);
+        });
       });
     });
+  }
+
+  // ── PDF에서 문항 오려 그리기 (pdf.js) ─────────────────────────────
+  // 지면 이미지를 페이지에 미리 굽으면 문항 수백 개에서 용량이 터진다.
+  // 대신 좌표만 들고 있다가, 문항을 여는 순간 사이트에 실린 PDF의 해당
+  // 영역을 캔버스에 그린다. 몇만 문항이 되어도 페이지 크기가 같다.
+  const _docs = {};
+  const _pageCanvas = new Map();     // "url#page" -> 렌더된 전체 페이지 캔버스
+  const CLIP_SCALE = 2;
+
+  function getDoc(url){
+    if (!_docs[url]) _docs[url] = pdfjsLib.getDocument(url).promise;
+    return _docs[url];
+  }
+
+  async function renderedPage(url, pageNo){
+    const key = url + "#" + pageNo;
+    if (_pageCanvas.has(key)) return _pageCanvas.get(key);
+    const doc = await getDoc(url);
+    const page = await doc.getPage(pageNo);
+    const vp = page.getViewport({scale: CLIP_SCALE});
+    const c = document.createElement("canvas");
+    c.width = vp.width; c.height = vp.height;
+    await page.render({canvasContext: c.getContext("2d"), viewport: vp}).promise;
+    if (_pageCanvas.size > 6) _pageCanvas.delete(_pageCanvas.keys().next().value);
+    _pageCanvas.set(key, c);
+    return c;
+  }
+
+  async function drawClips(box, it){
+    const url = it.pdf.split("#")[0];
+    try{
+      for (const r of it.rects){
+        const pg = r[0], x0 = r[1], y0 = r[2], x1 = r[3], y1 = r[4];
+        const full = await renderedPage(url, pg);
+        const w = Math.max(1, Math.round((x1 - x0) * CLIP_SCALE));
+        const h = Math.max(1, Math.round((y1 - y0) * CLIP_SCALE));
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.className = "clip";
+        c.style.width = Math.round(x1 - x0) + "px";
+        c.getContext("2d").drawImage(full,
+          Math.round(x0 * CLIP_SCALE), Math.round(y0 * CLIP_SCALE), w, h,
+          0, 0, w, h);
+        box.appendChild(c);
+      }
+    } catch (e){
+      // 렌더가 안 되면 조용히 링크만 남긴다 — 원본 펼치기는 항상 있다
+      box.remove();
+    }
   }
 
   function run(){
@@ -572,7 +647,8 @@ footer b{color:var(--ink-soft); font-weight:600}
       + subs.length + "개</b>, 문항 <b>" + n + "개</b>를 색인했습니다. "
       + "<code>빛에너지</code>로 찾으면 <code>빛 에너지</code>도 나오고, "
       + "<b>어느 표기가 몇 번 쓰였는지</b> 세어 줍니다."
-      + (DATA.images ? " 문항을 누르면 원본 지면이 그대로 나옵니다." : "");
+      + ((DATA.images || DATA.pdfjs)
+          ? " 문항을 누르면 원본 지면이 그대로 나옵니다." : "");
 
     const notes = [
       "<p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어 "
@@ -584,7 +660,7 @@ footer b{color:var(--ink-soft); font-weight:600}
         + '">PDF 추가하기</a> — 올리면 1~2분 뒤 자동 반영됩니다. '
         + '같은 파일은 알아서 건너뜁니다.</p>');
     }
-    if (!DATA.images){
+    if (!DATA.images && !DATA.pdfjs){
       notes.unshift("<p><b>이 파일에는 지면 이미지가 없습니다.</b> 문항 수가 많아 "
         + "텍스트만 담았습니다. 지면을 보려면 <code>gichul web</code> 을 쓰거나 "
         + "<code>--subject</code> 로 갈라 뽑으세요.</p>");
