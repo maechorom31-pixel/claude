@@ -116,8 +116,11 @@ def find_spans(text: str, query: str) -> list[tuple[int, int]]:
 
 
 def readable(text: str) -> str:
-    """사람에게 보여줄 형태. 못 읽은 자리를 눈에 보이는 표시로."""
-    return text.replace(OBJ, "▯")
+    """사람에게 보여줄 형태. 못 읽은 자리를 눈에 보이는 표시로.
+
+    표시는 □ 를 쓴다. ▯ 같은 기호는 한글 글꼴에 없어 두부(tofu)로 깨진다.
+    """
+    return text.replace(OBJ, "□")
 
 
 def surface_forms(text: str, query: str) -> list[str]:

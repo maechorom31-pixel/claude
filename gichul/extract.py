@@ -86,16 +86,24 @@ def _find_tables(page: "pymupdf.Page", pno: int) -> list[Table]:
     return out
 
 
-def _gutter(page: "pymupdf.Page", width: float) -> float:
-    """두 단 사이 빈 띠의 한가운데. 본문 글줄 위치로 정한다."""
+def _gutter(page: "pymupdf.Page", width: float) -> tuple[float, float, float]:
+    """두 단 사이 빈 띠. (판정 기준선, 좌단이 넘지 못할 선, 우단이 넘지 못할 선).
+
+    가운데를 기준으로 자르면 그래프가 단 경계에 거의 닿는 문항에서 옆 단 글자가
+    한 조각 딸려 들어온다. 그래서 오려낼 때는 가운데가 아니라 실제 본문 경계로
+    자른다. 어느 단에 속하는지 판정할 때는 가운데를 쓴다.
+    """
     mid = width / 2
     narrow = [b for b in page.get_text("blocks")
               if b[6] == 0 and b[4].strip() and (b[2] - b[0]) <= width * FULL_WIDTH_RATIO]
     left = [b[2] for b in narrow if (b[0] + b[2]) / 2 < mid]
     right = [b[0] for b in narrow if (b[0] + b[2]) / 2 >= mid]
     if not left or not right:
-        return mid
-    return (max(left) + min(right)) / 2
+        return mid, mid, mid
+    max_left, min_right = max(left), min(right)
+    if max_left >= min_right:                 # 단 구분이 뚜렷하지 않으면 가운데로
+        return mid, mid, mid
+    return (max_left + min_right) / 2, min_right - 1.0, max_left + 1.0
 
 
 def _column_bounds(page: "pymupdf.Page", two_col: bool) -> dict[int, tuple[float, float]]:
@@ -105,14 +113,17 @@ def _column_bounds(page: "pymupdf.Page", two_col: bool) -> dict[int, tuple[float
     단 경계를 넘기면 옆 단 문항이 딸려 들어오므로 gutter 에서 자른다.
     """
     width = page.rect.width
-    gutter = _gutter(page, width) if two_col else width
+    if two_col:
+        gutter, left_limit, right_limit = _gutter(page, width)
+    else:
+        gutter = left_limit = right_limit = width
     spans: dict[int, list[float]] = {}
 
     def note(col: int, x0: float, x1: float) -> None:
         if col == 0:
-            x1 = min(x1, gutter)
+            x1 = min(x1, left_limit)
         elif col == 1:
-            x0 = max(x0, gutter)
+            x0 = max(x0, right_limit)
         if x1 <= x0:
             return
         g = spans.get(col)
