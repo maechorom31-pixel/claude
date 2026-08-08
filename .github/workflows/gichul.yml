@@ -1,0 +1,91 @@
+# pdfs/ 에 PDF가 올라오면 자동으로 색인하고 검색 페이지를 다시 만든다.
+#
+# 쓰는 법 (코드 몰라도 됨):
+#   1. GitHub 웹에서 pdfs/ 폴더 열기 → "Add file → Upload files" → PDF 끌어다 놓기
+#   2. 1~2분 뒤 data/REPORT.md 에서 처리 결과 확인
+#   3. 검색 페이지:
+#      - Pages 를 켰다면 (Settings → Pages → Source: GitHub Actions, 한 번만):
+#        https://<계정>.github.io/<저장소>/
+#      - 아니면 Actions → 이 실행 → Artifacts 에서 "검색페이지" 내려받아 열기
+#
+# 수동 실행: Actions 탭 → 기출 색인 갱신 → Run workflow
+#   (force 를 켜면 모든 PDF를 처음부터 다시 파싱한다 — 파서가 좋아졌을 때)
+
+name: 기출 색인 갱신
+
+on:
+  push:
+    paths:
+      - "pdfs/**"
+      - "gichul/**"
+      - "scripts/**"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "모든 PDF를 처음부터 다시 파싱"
+        type: boolean
+        default: false
+
+concurrency:
+  group: gichul-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: pip install --quiet pymupdf
+
+      - name: 색인 갱신
+        env:
+          GICHUL_FORCE: ${{ inputs.force && '1' || '0' }}
+        run: python scripts/ci_update.py
+
+      - name: 데이터 커밋 (archive.jsonl.gz + REPORT.md)
+        run: |
+          git config user.name "gichul-bot"
+          git config user.email "gichul-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "변경 없음"
+          else
+            git commit -m "색인 갱신 [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push
+          fi
+
+      - name: 검색 페이지를 실행 결과물로 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: 검색페이지
+          path: site/
+
+      - name: Pages 용으로 패키징
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  # Pages 를 켜지 않았으면 이 잡만 실패하고 나머지는 정상이다.
+  # 켜는 법: Settings → Pages → Source 를 "GitHub Actions" 로 (한 번만).
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
