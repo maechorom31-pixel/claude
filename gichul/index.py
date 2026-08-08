@@ -19,7 +19,7 @@ from .meta import ExamMeta, canon_subject, subject_aliases
 from .normalize import OBJ, FOLD_MAP, STRIPPED_SPACES, find_spans, query_key, readable
 
 DEFAULT_DB = os.environ.get("GICHUL_DB", os.path.expanduser("~/.gichul/index.db"))
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _sql_str(s: str) -> str:
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS exams(
   filename TEXT NOT NULL,
   year INTEGER, exam TEXT, grade TEXT, subject TEXT,
   n_pages INTEGER, n_questions INTEGER,
+  parser INTEGER DEFAULT 0,         -- 이 시험지를 파싱한 파서 버전
   scanned_pages TEXT,
   ingested_at TEXT NOT NULL
 );
@@ -144,14 +145,15 @@ def delete_exam(conn: sqlite3.Connection, exam_id: int) -> None:
 
 
 def add_exam(conn: sqlite3.Connection, *, sha1: str, path: str, meta: ExamMeta,
-             segments, n_pages: int, scanned_pages: list[int]) -> int:
+             segments, n_pages: int, scanned_pages: list[int],
+             parser: int = 0) -> int:
     n_q = sum(1 for s in segments if _seg_kind(s) == "question")
     cur = conn.execute(
         """INSERT INTO exams(sha1, path, filename, year, exam, grade, subject,
-                             n_pages, n_questions, scanned_pages, ingested_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                             n_pages, n_questions, parser, scanned_pages, ingested_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
         (sha1, os.path.abspath(path), os.path.basename(path), meta.year, meta.exam,
-         meta.grade, meta.subject, n_pages, n_q,
+         meta.grade, meta.subject, n_pages, n_q, parser,
          ",".join(map(str, scanned_pages)), datetime.now(timezone.utc).isoformat(timespec="seconds")),
     )
     exam_id = int(cur.lastrowid)

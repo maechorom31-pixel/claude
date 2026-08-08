@@ -57,6 +57,7 @@ def export_jsonl(conn: sqlite3.Connection, path: str) -> int:
                 "sha1": e["sha1"], "filename": e["filename"], "path": e["path"],
                 "year": e["year"], "exam": e["exam"], "grade": e["grade"],
                 "subject": e["subject"], "n_pages": e["n_pages"],
+                "parser": e["parser"],
                 "scanned_pages": e["scanned_pages"],
                 "segments": segs,
             }, ensure_ascii=False) + "\n")
@@ -95,7 +96,7 @@ def import_jsonl(conn: sqlite3.Connection, path: str, *, force: bool = False) ->
         scanned = [int(x) for x in (rec.get("scanned_pages") or "").split(",") if x]
         idx.add_exam(conn, sha1=rec["sha1"], path=rec.get("path") or rec["filename"],
                      meta=meta, segments=segs, n_pages=rec["n_pages"],
-                     scanned_pages=scanned)
+                     scanned_pages=scanned, parser=rec.get("parser") or 0)
         added += 1
     return {"added": added, "skipped": skipped,
             "size": os.path.getsize(path) if os.path.exists(path) else 0}

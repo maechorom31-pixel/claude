@@ -12,6 +12,10 @@ from .extract import extract
 from .meta import ExamMeta, from_filename, from_text, merge
 from .segment import Segment, segment
 
+# 파서를 고칠 때마다 올린다. CI 가 이전 버전으로 파싱된 시험지를 찾아
+# 알아서 다시 파싱하므로, 수동으로 force 를 켤 필요가 없다.
+PARSER_VERSION = 2
+
 
 @dataclass
 class IngestResult:
@@ -108,7 +112,8 @@ def ingest_file(conn: sqlite3.Connection, path: str, *,
         if existing:
             idx.delete_exam(conn, existing["id"])
         exam_id = idx.add_exam(conn, sha1=sha1, path=path, meta=meta, segments=segs,
-                               n_pages=ex.n_pages, scanned_pages=ex.scanned_pages)
+                               n_pages=ex.n_pages, scanned_pages=ex.scanned_pages,
+                               parser=PARSER_VERSION)
         return IngestResult(
             path, "replaced" if existing else "added", exam_id=exam_id, meta=meta,
             n_questions=sum(1 for s in segs if s.kind == "question"),

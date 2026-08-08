@@ -20,6 +20,7 @@ on:
     branches: [main]
     paths:
       - "pdfs/**"
+      - "*.pdf"          # 저장소 맨 위에 잘못 올려도 봇이 pdfs/ 로 거둔다
       - "gichul/**"
       - "scripts/**"
   workflow_dispatch:
@@ -70,7 +71,7 @@ jobs:
         run: |
           git config user.name "gichul-bot"
           git config user.email "gichul-bot@users.noreply.github.com"
-          git add -A data pdfs
+          git add -A          # data·pdfs 와, 루트에서 거둬 간 PDF 삭제까지 (site/ 는 gitignore)
           if git diff --cached --quiet; then
             echo "변경 없음"
           else
