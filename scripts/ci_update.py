@@ -190,12 +190,44 @@ def build_site(conn, site_dir: str) -> list[str]:
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>기출 문항 검색</title><style>{_INDEX_CSS}</style>"
             '<div class="wrap"><h1><span>기출 문항 검색</span></h1>'
-            "<p>과목을 고르면 검색 페이지가 열립니다. 띄어쓰기를 무시하고 찾고, "
-            "표기 용례를 세어 줍니다.</p>"
             f"<ul>{items}</ul>"
-            f"<footer>갱신 {now} (한국 시간) · pdfs/ 폴더에 PDF를 올리면 자동으로 "
-            "다시 만들어집니다.</footer></div>")
+            f"<footer>갱신 {now}</footer></div>")
     return notes
+
+
+def _upload_url() -> str | None:
+    """GitHub 웹의 '이 폴더에 파일 올리기' 화면으로 바로 가는 주소."""
+    repo = os.environ.get("GITHUB_REPOSITORY")          # 예: 계정/저장소
+    if not repo:
+        return None
+    branch = os.environ.get("GITHUB_REF_NAME", "main")
+    return f"https://github.com/{repo}/upload/{branch}/pdfs"
+
+
+def write_empty_site(site_dir: str) -> None:
+    """아직 아무것도 색인되지 않았을 때의 첫 화면.
+
+    처음 마주치는 화면이 이것이므로, 다음에 할 일(업로드)로 바로
+    이어지게 만든다.
+    """
+    os.makedirs(site_dir, exist_ok=True)
+    url = _upload_url()
+    button = (f'<p><a class="go" href="{html.escape(url)}">pdfs 폴더에 PDF 올리기 →</a></p>'
+              if url else
+              "<p>저장소의 <b>pdfs</b> 폴더 → <b>Add file → Upload files</b> 로 올리세요.</p>")
+    with open(os.path.join(site_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write(
+            '<!doctype html><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>기출 문항 검색</title><style>{_INDEX_CSS}"
+            "a.go{display:inline-flex;background:var(--mark);color:#1A1C18;"
+            "border:none;font-weight:600}</style>"
+            '<div class="wrap"><h1><span>기출 문항 검색</span></h1>'
+            "<p>아직 올라온 시험지가 없습니다. PDF를 올리면 1~2분 뒤 이 자리에 "
+            "과목별 검색 페이지가 생깁니다.</p>"
+            f"{button}"
+            "<footer>올린 뒤에는 이 페이지를 새로고침하세요. 처리 결과는 저장소의 "
+            "data/REPORT.md 에 적힙니다.</footer></div>")
 
 
 def main() -> int:
@@ -231,10 +263,7 @@ def main() -> int:
             for note in build_site(conn, site_dir):
                 print(f"페이지: {note}")
         else:
-            os.makedirs(site_dir, exist_ok=True)
-            with open(os.path.join(site_dir, "index.html"), "w", encoding="utf-8") as f:
-                f.write("<meta charset='utf-8'><p>아직 색인된 시험지가 없습니다. "
-                        "pdfs/ 폴더에 PDF를 올리세요.</p>")
+            write_empty_site(site_dir)
 
         failed = [r for r in results if r.status == "failed"]
         for r in failed:
