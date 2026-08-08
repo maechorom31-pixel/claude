@@ -162,7 +162,7 @@ _TEMPLATE = r"""<meta charset="utf-8">
       바탕은 인쇄 용지, 글자는 잉크, 강조는 형광펜 연두, 소수 표기는 첨삭 빨강. */
 :root{
   --paper:#F6F7F4; --card:#FFFFFF; --sunken:#EEF0EA;
-  --ink:#1A1C18; --ink-soft:#5B6058; --ink-faint:#858C80;
+  --ink:#1A1C18; --ink-soft:#454B43; --ink-faint:#68705F;
   --rule:#D5D9D0; --rule-strong:#B9BFB2;
   --mark:#C8E24B; --mark-ink:#1A1C18;
   --pen:#C33A2C;
@@ -196,7 +196,8 @@ body{
   font:16px/1.6 var(--sans);
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:60rem;margin:0 auto;padding:2.5rem 1.25rem 5rem}
+.wrap{max-width:76rem;margin:0 auto;padding:2.2rem 1.25rem 5rem}
+.colmain{max-width:60rem;min-width:0}
 
 /* ── 머리 */
 .eyebrow{
@@ -222,8 +223,8 @@ h1 .hl{background:var(--mark);color:var(--mark-ink);padding:0 .12em}
 }
 .field{display:flex; gap:.5rem; align-items:stretch}
 #q{
-  flex:1; min-width:0; font:1.05rem/1 var(--sans); color:var(--ink);
-  padding:.75rem .9rem; background:var(--card);
+  flex:1; min-width:0; font:1.12rem/1 var(--sans); color:var(--ink);
+  padding:.8rem 1rem; background:var(--card);
   border:1px solid var(--rule-strong); border-radius:2px;
 }
 #q::placeholder{color:var(--ink-faint)}
@@ -254,7 +255,7 @@ button.go{
 
 /* ── 요약: 표기 분포 */
 .summary{margin:1.6rem 0 0}
-.count{font-size:.95rem; color:var(--ink-soft); margin:0 0 .9rem}
+.count{font-size:1.08rem; color:var(--ink-soft); margin:.2rem 0 1rem}
 .count b{color:var(--ink); font-variant-numeric:tabular-nums}
 .dist{border:1px solid var(--rule); background:var(--card); border-radius:2px;
   padding:1rem 1.1rem; margin:0 0 1.6rem}
@@ -276,28 +277,44 @@ button.go{
 .verdict{margin:.9rem 0 0; font-size:.95rem}
 .verdict .lead{color:var(--ink-faint)}
 
+/* ── 2단: 기출 | 사전 */
+.cols{display:grid; gap:1.4rem; align-items:start}
+@media (min-width:1100px){
+  .cols{grid-template-columns:minmax(0,1fr) 400px}
+  .dict{position:sticky; top:7rem}
+}
+.dict{border:1px solid var(--rule); border-radius:2px; background:var(--card);
+  overflow:hidden}
+.dicthead{display:flex; justify-content:space-between; align-items:baseline;
+  gap:1rem; padding:.55rem .85rem; border-bottom:1px solid var(--rule);
+  font-size:.8rem; letter-spacing:.06em; color:var(--ink-soft)}
+.dicthead a{color:var(--focus); text-decoration:none; font-size:.78rem}
+.dicthead a:hover{text-decoration:underline}
+.dict iframe{width:100%; height:72vh; border:0; display:block; background:#fff}
+@media (max-width:1099px){ .dict iframe{height:50vh} }
+
 /* ── 결과 */
-.results{display:grid; gap:.6rem; margin-top:.4rem}
+.results{display:grid; gap:.8rem; margin-top:.4rem}
 details.hit{
   background:var(--card); border:1px solid var(--rule); border-radius:2px;
 }
 details.hit[open]{border-color:var(--rule-strong)}
 summary.head{
-  cursor:pointer; padding:.75rem .95rem; display:grid; gap:.3rem;
+  cursor:pointer; padding:.9rem 1.05rem; display:grid; gap:.35rem;
   list-style:none;
 }
 summary.head::-webkit-details-marker{display:none}
 summary.head:hover{background:var(--sunken)}
 .src{display:flex; flex-wrap:wrap; gap:.5rem; align-items:baseline}
-.srctext{font:600 .92rem var(--sans)}
+.srctext{font:600 1rem var(--sans)}
 .qno{
-  font:600 .78rem var(--sans); font-variant-numeric:tabular-nums;
+  font:700 .85rem var(--sans); font-variant-numeric:tabular-nums;
   background:var(--sunken); color:var(--ink-soft);
   border:1px solid var(--rule); border-radius:1px; padding:.05rem .4rem;
 }
 .where{font-size:.78rem; color:var(--ink-faint); font-variant-numeric:tabular-nums}
-.snip{font-family:var(--serif); font-size:1rem; line-height:1.55; color:var(--ink-soft)}
-.snip mark{background:var(--mark); color:var(--mark-ink); padding:0 .1em; border-radius:0}
+.snip{font-family:var(--serif); font-size:1.05rem; line-height:1.6; color:var(--ink-soft)}
+.snip mark{background:var(--mark); color:var(--mark-ink); padding:0 .12em; font-weight:600}
 .body{padding:0 .95rem 1.1rem; border-top:1px solid var(--rule)}
 .body .rowlabel{margin-top:1rem}
 img.clip,canvas.clip{
@@ -343,8 +360,19 @@ footer b{color:var(--ink-soft); font-weight:600}
     <div class="chips" id="subjects"></div>
   </div>
 
-  <div class="summary" id="summary"></div>
-  <div class="results" id="results"></div>
+  <div class="cols">
+    <div class="colmain">
+      <div class="summary" id="summary"></div>
+      <div class="results" id="results"></div>
+    </div>
+    <aside class="dict" id="dict" hidden>
+      <div class="dicthead">
+        <span>표준국어대사전</span>
+        <a id="dictout" target="_blank" rel="noopener">새 창에서 열기 ↗</a>
+      </div>
+      <iframe id="dictframe" title="표준국어대사전 검색 결과" loading="lazy"></iframe>
+    </aside>
+  </div>
 
   <footer id="foot"></footer>
 </div>
@@ -620,6 +648,21 @@ footer b{color:var(--ink-soft); font-weight:600}
     }
   }
 
+  let dictTimer = null;
+  function updateDict(query){
+    const pane = document.getElementById("dict");
+    clearTimeout(dictTimer);
+    if (!query){ pane.hidden = true; return; }
+    dictTimer = setTimeout(() => {
+      const url = "https://stdict.korean.go.kr/search/searchResult.do?searchKeyword="
+        + encodeURIComponent(query);
+      const f = document.getElementById("dictframe");
+      if (f.dataset.q !== query){ f.src = url; f.dataset.q = query; }
+      document.getElementById("dictout").href = url;
+      pane.hidden = false;
+    }, 700);
+  }
+
   function run(){
     const query = elQ.value.trim();
     const hits = query ? search(query, subject) : [];
@@ -630,6 +673,7 @@ footer b{color:var(--ink-soft); font-weight:600}
     }
     renderSummary(query, hits);
     renderResults(hits);
+    updateDict(query);
   }
 
   // 머리말과 꼬리말은 실제로 담긴 내용에서 만든다. 과목이 늘어나도 문구가 어긋나지 않게.
@@ -643,12 +687,11 @@ footer b{color:var(--ink-soft); font-weight:600}
       : "";
     const subs = Object.keys(DATA.counts);
     document.getElementById("lede").innerHTML =
-      (span ? esc(span) + " " : "") + "시험지 <b>" + papers.length + "개</b>, 과목 <b>"
-      + subs.length + "개</b>, 문항 <b>" + n + "개</b>를 색인했습니다. "
-      + "<code>빛에너지</code>로 찾으면 <code>빛 에너지</code>도 나오고, "
-      + "<b>어느 표기가 몇 번 쓰였는지</b> 세어 줍니다."
+      (span ? esc(span) + " " : "") + "평가원 기출 <b>" + n + "문항</b> · 시험지 "
+      + papers.length + "개. 띄어쓰기가 달라도 찾고(<code>빛에너지</code> = "
+      + "<code>빛 에너지</code>), 표기 빈도를 세고, 옆에 표준국어대사전이 함께 뜹니다."
       + ((DATA.images || DATA.pdfjs)
-          ? " 문항을 누르면 원본 지면이 그대로 나옵니다." : "");
+          ? " 문항을 누르면 원본 지면이 나옵니다." : "");
 
     const notes = [
       "<p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어 "
