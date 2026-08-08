@@ -85,9 +85,14 @@ def ingest_file(conn: sqlite3.Connection, path: str, *,
         ex = extract(path)
         segs = segment(ex.lines)
         _attach_tables(segs, ex.tables)
-        meta = merge(overrides or ExamMeta(),
-                     from_text(_meta_text(segs, ex.text)),
-                     from_filename(os.path.basename(path)))
+        fm = from_filename(os.path.basename(path))
+        # 파일명이 `연도_시험_과목` 규칙으로 과목을 지정했으면 표지 판독보다
+        # 우선한다. 표지를 잘못 읽었을 때 사용자가 바로잡는 길이 이것뿐이다.
+        # 연도·시험 종류는 표지가 대체로 정확하므로 순서를 바꾸지 않는다.
+        pin = ExamMeta(subject=fm.subject, subject_raw=fm.subject_raw) \
+            if fm.explicit else ExamMeta()
+        meta = merge(overrides or ExamMeta(), pin,
+                     from_text(_meta_text(segs, ex.text)), fm)
 
         if existing:
             idx.delete_exam(conn, existing["id"])

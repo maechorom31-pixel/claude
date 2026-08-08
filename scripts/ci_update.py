@@ -71,6 +71,10 @@ def repair_meta_from_filenames(conn, pdf_dir: str) -> list[tuple[str, dict]]:
         for field in ("year", "exam", "grade", "subject"):
             if row[field] is None and getattr(fm, field):
                 updates[field] = getattr(fm, field)
+        # `연도_시험_과목` 규칙으로 지정한 과목은 이미 들어간 값과 달라도
+        # 바로잡는다. 표지를 잘못 읽었을 때의 수정 경로다.
+        if fm.explicit and fm.subject and row["subject"] != fm.subject:
+            updates["subject"] = fm.subject
         if updates:
             sets = ", ".join(f"{k}=?" for k in updates)
             conn.execute(f"UPDATE exams SET {sets} WHERE id=?",
@@ -80,7 +84,23 @@ def repair_meta_from_filenames(conn, pdf_dir: str) -> list[tuple[str, dict]]:
     return fixed
 
 
-def write_report(conn, path: str, results, fixed) -> None:
+def prune_missing(conn, enabled: bool) -> list[str]:
+    """원본 PDF가 더는 없는 시험지를 색인에서 뺀다.
+
+    기본 동작은 '지워도 데이터는 남는다'(용량 정리용)이므로, 잘못 올린 파일을
+    치우고 싶을 때만 수동 실행에서 켠다.
+    """
+    if not enabled:
+        return []
+    gone = [(r["id"], r["filename"]) for r in
+            conn.execute("SELECT id, filename, path FROM exams")
+            if not os.path.exists(r["path"])]
+    for exam_id, _name in gone:
+        idx.delete_exam(conn, exam_id)
+    return [name for _id, name in gone]
+
+
+def write_report(conn, path: str, results, fixed, pruned=()) -> None:
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
     lines = ["# 기출 색인 처리 결과", "", f"갱신: {now} (한국 시간)", ""]
 
@@ -103,6 +123,13 @@ def write_report(conn, path: str, results, fixed) -> None:
         lines.append(f"- ⏭️ 이미 색인된 파일 {skipped}개는 건너뜀")
     lines.append("")
 
+    if pruned:
+        lines.append("## 색인에서 뺀 시험지 (원본 PDF 삭제됨, prune 실행)")
+        lines.append("")
+        for name in pruned:
+            lines.append(f"- `{name}`")
+        lines.append("")
+
     if fixed:
         lines.append("## 파일명으로 채워진 정보")
         lines.append("")
@@ -116,8 +143,10 @@ def write_report(conn, path: str, results, fixed) -> None:
     if unknown:
         lines.append("## ⚠️ 과목을 읽지 못한 시험지")
         lines.append("")
-        lines.append("pdfs/ 안에서 **파일명에 과목을 넣어 이름을 바꾸면** "
-                     "(예: `2026_7월학평_물리학1.pdf`) 다음 실행에서 자동으로 채워집니다.")
+        lines.append("pdfs/ 안에서 파일명을 **`연도_시험_과목`** 꼴로 바꾸면 "
+                     "(예: `2027_수능_생명과학1.pdf`, 약어 `생윤`·`물1`·`언매`도 됨) "
+                     "다음 실행에서 자동으로 채워집니다. 과목이 **잘못** 잡혔을 때도 "
+                     "같은 방법으로 바로잡힙니다.")
         lines.append("")
         for row in unknown:
             lines.append(f"- `{row['filename']}`")
@@ -255,12 +284,15 @@ def main() -> int:
         if os.path.isdir(pdf_dir):
             results = ingest_paths(conn, [pdf_dir], force=force)
         fixed = repair_meta_from_filenames(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
+        pruned = prune_missing(conn, os.environ.get("GICHUL_PRUNE") == "1")
+        if pruned:
+            print(f"정리: 원본이 없는 시험지 {len(pruned)}개를 색인에서 뺌")
 
         n = export_jsonl(conn, archive)
         print(f"저장: 시험지 {n}개 → {archive} "
               f"({os.path.getsize(archive)/2**20:.2f}MB)")
 
-        write_report(conn, os.path.join(data_dir, "REPORT.md"), results, fixed)
+        write_report(conn, os.path.join(data_dir, "REPORT.md"), results, fixed, pruned)
         print(f"보고서: {os.path.join(data_dir, 'REPORT.md')}")
 
         if idx.stats(conn)["exams"]:
