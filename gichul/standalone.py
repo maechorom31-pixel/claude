@@ -1,30 +1,33 @@
-"""색인 DB -> 자립형 데모 HTML 생성.
+"""색인을 파일 하나짜리 HTML로 묶는다.
 
-  python3 tools/build_demo.py [색인DB] [출력.html]
+문항 텍스트와 지면 이미지를 안에 넣어 두고 검색은 브라우저에서 돈다.
+파이썬도 서버도 없이 열리므로, 남에게 보내거나 통째로 보관할 때 쓴다.
 
-파일 하나로 끝나는 HTML을 만든다. 문항 텍스트와 지면 이미지를 안에 넣어 두고
-검색은 브라우저에서 돈다. 서버 없이 남에게 보여 주거나 보관할 때 쓴다.
-검색·표기 집계 규칙은 gichul/normalize.py 와 같게 옮겨 두었다.
+검색·표기 집계 규칙은 normalize.py / index.variants 와 같은 것을 자바스크립트로
+옮겨 놓았다. 한쪽만 고치면 결과가 달라지므로 함께 손봐야 한다.
 """
+
 from __future__ import annotations
 
 import base64
 import json
 import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sqlite3
 
 import pymupdf
 
-from gichul import index as idx, render
+from . import index as idx
+from . import render
 
-DB = sys.argv[1] if len(sys.argv) > 1 else idx.DEFAULT_DB
-OUT = sys.argv[2] if len(sys.argv) > 2 else "gichul-demo.html"
-ZOOM, QUALITY = 1.5, 68
+ZOOM, QUALITY = 1.5, 68        # 지면 이미지 해상도와 JPEG 품질
+
+# 지면 이미지는 문항당 30~90 KiB 다. 과목을 늘려 가면 수천 문항이 되므로
+# 예산을 넘으면 이미지를 빼고 텍스트만 담는다. 검색·용례는 그대로 된다.
+DEFAULT_MAX_MB = 12
+_EST_BYTES_PER_IMAGE = 55_000
 
 
-def clip_jpeg(row, part=0):
+def _clip_jpeg(row, part: int = 0) -> bytes | None:
     rs = render.rects_of(row)
     if not rs:
         return None
@@ -41,26 +44,60 @@ def clip_jpeg(row, part=0):
         doc.close()
 
 
-def main() -> None:
-    conn = idx.connect(DB)
+def build(conn: sqlite3.Connection, out_path: str, *,
+          subject: str | None = None, year: int | None = None,
+          exam: str | None = None, images: bool | None = None,
+          max_mb: float = DEFAULT_MAX_MB) -> dict:
+    """자립형 HTML을 쓰고 요약을 돌려준다.
+
+    images=None 이면 예산(max_mb)에 맞는지 보고 알아서 정한다.
+    필터를 주면 그 범위만 담는다. 과목이 늘어나면 통째로 담는 대신
+    `--subject 국어` 처럼 갈라 뽑는 쪽이 현실적이다.
+    """
+    from .meta import subject_aliases
+
+    where, params = ["s.kind='question'"], []
+    if subject:
+        aliases = sorted(subject_aliases(subject))
+        where.append("e.subject IN (%s)" % ",".join("?" * len(aliases)))
+        params += aliases
+    if year:
+        where.append("e.year=?")
+        params.append(year)
+    if exam:
+        where.append("e.exam LIKE ?")
+        params.append(f"%{exam}%")
+    clause = " AND ".join(where)
+
+    n_questions = conn.execute(
+        f"SELECT COUNT(*) FROM segments s JOIN exams e ON e.id=s.exam_id WHERE {clause}",
+        params).fetchone()[0]
+    if images is None:
+        images = n_questions * _EST_BYTES_PER_IMAGE <= max_mb * 2 ** 20
+
     papers, items = {}, []
     total_bytes = 0
 
-    for e in conn.execute("SELECT * FROM exams ORDER BY subject"):
+    for e in conn.execute(
+            "SELECT DISTINCT e.* FROM exams e JOIN segments s ON s.exam_id=e.id "
+            f"WHERE {clause} ORDER BY e.subject", params):
         papers[e["id"]] = {"subject": e["subject"], "year": e["year"],
                            "exam": e["exam"], "grade": e["grade"],
                            "pages": e["n_pages"], "questions": e["n_questions"]}
 
     rows = conn.execute(
-        "SELECT id FROM segments WHERE kind='question' ORDER BY exam_id, number").fetchall()
+        f"SELECT s.id FROM segments s JOIN exams e ON e.id=s.exam_id WHERE {clause} "
+        "ORDER BY s.exam_id, s.number", params).fetchall()
     for r in rows:
         row = idx.get_segment(conn, r["id"])
         imgs = []
-        for part in range(render.segment_parts(row)):
-            jpg = clip_jpeg(row, part)
-            if jpg:
-                total_bytes += len(jpg)
-                imgs.append("data:image/jpeg;base64," + base64.b64encode(jpg).decode())
+        if images:
+            for part in range(render.segment_parts(row)):
+                jpg = _clip_jpeg(row, part)
+                if jpg:
+                    total_bytes += len(jpg)
+                    imgs.append("data:image/jpeg;base64,"
+                                + base64.b64encode(jpg).decode())
         items.append({
             "id": row["id"],
             "src": idx.segment_source(row),
@@ -76,17 +113,18 @@ def main() -> None:
     for it in items:
         counts[it["subject"]] = counts.get(it["subject"], 0) + 1
 
-    data = {"papers": list(papers.values()), "items": items, "counts": counts}
+    data = {"papers": list(papers.values()), "items": items, "counts": counts,
+            "images": bool(images)}
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
-    html = TEMPLATE.replace("/*__DATA__*/", "window.GICHUL=" + payload + ";")
-    with open(OUT, "w", encoding="utf-8") as f:
+    html = _TEMPLATE.replace("/*__DATA__*/", "window.GICHUL=" + payload + ";")
+    with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"문항 {len(items)}개 · 이미지 {total_bytes/2**20:.1f} MiB "
-          f"· HTML {os.path.getsize(OUT)/2**20:.1f} MiB -> {OUT}")
+    return {"questions": len(items), "papers": len(papers), "images": bool(images),
+            "image_bytes": total_bytes, "size": os.path.getsize(out_path)}
 
 
-TEMPLATE = r"""<title>기출 문항 검색 — 띄어쓰기를 몰라도 찾는다</title>
+_TEMPLATE = r"""<title>기출 문항 검색 — 띄어쓰기를 몰라도 찾는다</title>
 <style>
 /* ── 팔레트: 시험지 지면에서 가져왔다.
       바탕은 인쇄 용지, 글자는 잉크, 강조는 형광펜 연두, 소수 표기는 첨삭 빨강. */
@@ -259,13 +297,9 @@ footer b{color:var(--ink-soft); font-weight:600}
 </style>
 
 <div class="wrap">
-  <p class="eyebrow">기출 문항 검색기 · 데모</p>
+  <p class="eyebrow">기출 문항 검색</p>
   <h1><span class="hl">빛에너지</span>로 찾으면 <span class="hl">빛 에너지</span>도 나온다</h1>
-  <p class="lede">
-    2026학년도 7월 고3 전국연합학력평가 과학탐구 4과목, <b>문항 80개</b>를 실제로
-    색인한 결과입니다. 띄어쓰기를 무시해 찾고, <b>어느 표기가 몇 번 쓰였는지</b>
-    세어 주고, 누르면 원본 지면을 그대로 보여줍니다.
-  </p>
+  <p class="lede" id="lede"></p>
 
   <div class="search">
     <form class="field" id="form">
@@ -273,8 +307,6 @@ footer b{color:var(--ink-soft); font-weight:600}
              aria-label="찾을 낱말이나 표현">
       <button class="go" type="submit">찾기</button>
     </form>
-    <p class="rowlabel">예시</p>
-    <div class="chips" id="examples"></div>
     <p class="rowlabel">과목</p>
     <div class="chips" id="subjects"></div>
   </div>
@@ -282,16 +314,7 @@ footer b{color:var(--ink-soft); font-weight:600}
   <div class="summary" id="summary"></div>
   <div class="results" id="results"></div>
 
-  <footer>
-    <p><b>이 데모는 실제 파서의 출력입니다.</b> 검색·표기 집계 방식은 파이썬 쪽
-       <code>normalize.py</code> 와 같은 규칙을 옮긴 것이고, 문항 이미지는
-       원본 PDF에서 좌표로 오려낸 것입니다.</p>
-    <p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어
-       유니코드 매핑이 없습니다. 화학Ⅰ 10.7%, 물리학Ⅰ 4.9%, 생명과학Ⅰ 0.5%,
-       지구과학Ⅰ 0.2%. 그래서 원본 지면 보기가 필요합니다.</p>
-    <p>실제 도구는 명령줄과 로컬 웹 UI로 돌아가고, 시험지 500개를 쌓아도
-       색인은 21–72 MiB 입니다.</p>
-  </footer>
+  <footer id="foot"></footer>
 </div>
 
 <script>
@@ -460,7 +483,7 @@ footer b{color:var(--ink-soft); font-weight:600}
         + '<span class="where">p.' + it.page + "</span></span>"
         + '<span class="snip">' + snippet(it.text, h.spans, 55) + "</span>"
         + "</summary><div class='body'>"
-        + '<p class="rowlabel">원본 지면</p>' + imgs
+        + (imgs ? '<p class="rowlabel">원본 지면</p>' + imgs : "")
         + (tables ? '<p class="rowlabel">표</p>' + tables : "")
         + '<p class="rowlabel">추출된 텍스트</p>'
         + '<pre class="raw">' + esc(readable(it.text)) + "</pre>"
@@ -493,18 +516,36 @@ footer b{color:var(--ink-soft); font-weight:600}
     renderResults(hits);
   }
 
-  // 예시는 이 4과목에서 실제로 무언가 보여 주는 것만 골랐다.
-  const EXAMPLES = ["옳은것만을", "상리공생", "질량결손", "마그마", "적절한것은",
-                    "3점", "화석연료"];
-  document.getElementById("examples").innerHTML = EXAMPLES.map(e =>
-    '<button class="chip" type="button" data-ex="' + esc(e) + '">'
-    + esc(e) + "</button>").join("");
-  document.getElementById("examples").addEventListener("click", ev => {
-    const b = ev.target.closest("[data-ex]");
-    if (!b) return;
-    elQ.value = b.dataset.ex;
-    run();
-  });
+  // 머리말과 꼬리말은 실제로 담긴 내용에서 만든다. 과목이 늘어나도 문구가 어긋나지 않게.
+  (function describe(){
+    const papers = DATA.papers, n = DATA.items.length;
+    const years = papers.map(p => p.year).filter(Boolean);
+    const span = years.length
+      ? (Math.min.apply(null, years) === Math.max.apply(null, years)
+          ? Math.min.apply(null, years) + "학년도"
+          : Math.min.apply(null, years) + "–" + Math.max.apply(null, years) + "학년도")
+      : "";
+    const subs = Object.keys(DATA.counts);
+    document.getElementById("lede").innerHTML =
+      (span ? esc(span) + " " : "") + "시험지 <b>" + papers.length + "개</b>, 과목 <b>"
+      + subs.length + "개</b>, 문항 <b>" + n + "개</b>를 색인했습니다. "
+      + "띄어쓰기를 무시해 찾고, <b>어느 표기가 몇 번 쓰였는지</b> 세어 줍니다."
+      + (DATA.images ? " 문항을 누르면 원본 지면이 그대로 나옵니다." : "");
+
+    const notes = [
+      "<p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어 "
+      + "유니코드 매핑이 없습니다. 수학·화학·물리처럼 수식이 많은 과목에서 두드러지고, "
+      + "국어·영어·사탐은 거의 영향이 없습니다.</p>",
+      "<p>검색과 표기 집계는 파이썬 쪽 <code>normalize.py</code> 와 같은 규칙입니다. "
+      + "이 파일은 <code>gichul html</code> 로 다시 만들면 갱신됩니다.</p>",
+    ];
+    if (!DATA.images){
+      notes.unshift("<p><b>이 파일에는 지면 이미지가 없습니다.</b> 문항 수가 많아 "
+        + "텍스트만 담았습니다. 지면을 보려면 <code>gichul web</code> 을 쓰거나 "
+        + "<code>--subject</code> 로 갈라 뽑으세요.</p>");
+    }
+    document.getElementById("foot").innerHTML = notes.join("");
+  })();
 
   const subs = Object.keys(DATA.counts).sort();
   document.getElementById("subjects").innerHTML =
@@ -528,11 +569,7 @@ footer b{color:var(--ink-soft); font-weight:600}
   });
   elQ.addEventListener("input", run);
 
-  elQ.value = "옳은것만을";
   run();
 })();
 </script>
 """
-
-if __name__ == "__main__":
-    main()

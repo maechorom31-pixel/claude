@@ -89,6 +89,33 @@ def test_meta_from_hakpyeong_header():
     assert (m.year, m.exam, m.grade, m.subject) == (2026, "7월 학평", "고3", "물리학I")
 
 
+def test_math_type_becomes_part_of_subject():
+    """`수학 영역 (가형)` 은 괄호 안이 과목이 아니라 시험지 유형이다.
+
+    가형과 나형은 문항이 다르므로 한 과목으로 묶으면 용례가 섞인다.
+    """
+    for text, want in [
+        ("2017학년도 대학수학능력시험\n제2교시 수학 영역 (가형)", "수학가형"),
+        ("2014학년도 대학수학능력시험\n제2교시 수학 영역 (A형)", "수학A형"),
+    ]:
+        assert from_text(text).subject == want, text
+
+
+def test_subjects_across_all_areas():
+    """국어·영어·사탐·과탐·고1 과목까지 표지에서 갈려야 한다."""
+    cases = [
+        ("2022학년도 수능\n제1교시 국어 영역 (언어와 매체)", "언어와매체"),
+        ("2026학년도 6월 모의평가\n제3교시 영어 영역", "영어"),
+        ("2025학년도 수능\n제4교시 사회탐구 영역 (생활과 윤리)", "생활과윤리"),
+        ("2020학년도 수능\n제4교시 사회탐구 영역 (사회·문화)", "사회문화"),
+        ("2026학년도 3월 고1 전국연합학력평가\n제4교시 통합사회 영역", "통합사회"),
+    ]
+    for text, want in cases:
+        assert from_text(text).subject == want, text
+    # 가운뎃점 표기는 같은 과목으로 묶여야 한다
+    assert canon_subject("사회·문화") == canon_subject("사회문화")
+
+
 def test_meta_umbrella_not_used_as_subject():
     m = from_text("제4 교시 과학탐구영역")
     assert m.subject != "과학탐구"
@@ -217,6 +244,32 @@ def test_jsonl_round_trip_without_pdfs():
         assert import_jsonl(conn2, out)["added"] == 3
         assert idx.stats(conn2) == idx.stats(conn)
         assert idx.search(conn2, "빛에너지")
+
+
+# ---------------------------------------------------------------- 자립형 HTML
+
+def test_standalone_html_embeds_and_filters():
+    from gichul.standalone import build
+    with tempfile.TemporaryDirectory() as tmp:
+        _sample_dir(tmp)
+        conn = _indexed(tmp)
+
+        out = os.path.join(tmp, "all.html")
+        r = build(conn, out)
+        assert r["questions"] == 19 and r["images"]
+        page = open(out, encoding="utf-8").read()
+        assert "data:image/jpeg;base64," in page
+        assert "빛에너지" in page and "window.GICHUL=" in page
+
+        # 과목 필터
+        r = build(conn, os.path.join(tmp, "ko.html"), subject="국어")
+        assert r["questions"] == 5 and r["papers"] == 1
+
+        # 문항이 많아지면 이미지를 빼고 텍스트만 담는다
+        r = build(conn, os.path.join(tmp, "slim.html"), max_mb=0.0001)
+        assert r["questions"] == 19 and not r["images"] and r["image_bytes"] == 0
+        assert "data:image/jpeg" not in open(
+            os.path.join(tmp, "slim.html"), encoding="utf-8").read()
 
 
 # ---------------------------------------------------------------- 이미지

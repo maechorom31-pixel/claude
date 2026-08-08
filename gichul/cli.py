@@ -222,6 +222,24 @@ def cmd_import(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_html(a: argparse.Namespace) -> int:
+    from .standalone import build
+    conn = idx.connect(a.db)
+    images = None if a.images is None else a.images
+    r = build(conn, a.out, subject=a.subject, year=a.year, exam=a.exam,
+              images=images, max_mb=a.max_mb)
+    print(f"{a.out}: 시험지 {r['papers']}개 · 문항 {r['questions']}개 "
+          f"· {r['size']/2**20:.1f} MiB")
+    if not r["questions"]:
+        print("  담을 문항이 없습니다. 필터를 확인하세요.")
+        return 1
+    if not r["images"] and a.images is None:
+        # 자동 판단으로 뺀 경우에만 알린다. --no-images 는 사용자가 시킨 것이다.
+        print("  지면 이미지는 넣지 않았습니다 (문항이 많아 용량 예산을 넘습니다).")
+        print("  넣으려면 --images 를, 과목별로 갈라 뽑으려면 --subject 를 쓰세요.")
+    return 0
+
+
 def cmd_compact(a: argparse.Namespace) -> int:
     conn = idx.connect(a.db)
     before = os.path.getsize(a.db)
@@ -300,6 +318,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("path")
     sp.add_argument("--force", action="store_true", help="이미 있는 시험지도 덮어쓰기")
     sp.set_defaults(func=cmd_import)
+
+    sp = sub.add_parser("html", help="색인을 파일 하나짜리 HTML로 (검색까지 브라우저에서)")
+    sp.add_argument("out", help="예: 기출검색.html")
+    sp.add_argument("--images", dest="images", action="store_true", default=None,
+                    help="지면 이미지를 반드시 넣는다 (용량이 커진다)")
+    sp.add_argument("--no-images", dest="images", action="store_false",
+                    help="텍스트만 담는다")
+    sp.add_argument("--max-mb", type=float, default=12.0,
+                    help="이미지 포함 여부를 자동 판단할 용량 예산 (기본 12MB)")
+    add_filters(sp)
+    sp.set_defaults(func=cmd_html)
 
     sp = sub.add_parser("compact", help="DB 조각 정리 및 압축")
     sp.set_defaults(func=cmd_compact)
