@@ -283,15 +283,23 @@ button.go{
   .cols{grid-template-columns:minmax(0,1fr) 400px}
   .dict{position:sticky; top:7rem}
 }
-.dict{border:1px solid var(--rule); border-radius:2px; background:var(--card);
-  overflow:hidden}
+.dict{border:1px solid var(--rule-strong); border-radius:3px;
+  background:var(--card); overflow:hidden}
 .dicthead{display:flex; justify-content:space-between; align-items:baseline;
-  gap:1rem; padding:.55rem .85rem; border-bottom:1px solid var(--rule);
-  font-size:.8rem; letter-spacing:.06em; color:var(--ink-soft)}
-.dicthead a{color:var(--focus); text-decoration:none; font-size:.78rem}
+  gap:1rem; padding:.6rem .9rem; border-bottom:1px solid var(--rule);
+  font-size:.85rem; color:var(--ink-soft)}
+.dicttitle b{color:var(--ink); font-weight:700}
+.dicthead a{color:var(--focus); text-decoration:none; font-size:.8rem;
+  white-space:nowrap}
 .dicthead a:hover{text-decoration:underline}
-.dict iframe{width:100%; height:72vh; border:0; display:block; background:#fff}
-@media (max-width:1099px){ .dict iframe{height:50vh} }
+.dictbody{position:relative; background:#fff}
+.dictload{position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; color:#888; font-size:.85rem; background:#fff}
+.dict iframe{position:relative; width:100%; height:70vh; border:0;
+  display:block; background:transparent}
+.dictfoot{padding:.4rem .9rem; border-top:1px solid var(--rule);
+  font-size:.72rem; color:var(--ink-faint)}
+@media (max-width:1099px){ .dict iframe{height:48vh} }
 
 /* ── 결과 */
 .results{display:grid; gap:.8rem; margin-top:.4rem}
@@ -367,10 +375,15 @@ footer b{color:var(--ink-soft); font-weight:600}
     </div>
     <aside class="dict" id="dict" hidden>
       <div class="dicthead">
-        <span>표준국어대사전</span>
-        <a id="dictout" target="_blank" rel="noopener">새 창에서 열기 ↗</a>
+        <span class="dicttitle">표준국어대사전 <b id="dictq"></b></span>
+        <a id="dictout" target="_blank" rel="noopener">새 창 ↗</a>
       </div>
-      <iframe id="dictframe" title="표준국어대사전 검색 결과" loading="lazy"></iframe>
+      <div class="dictbody">
+        <div class="dictload" id="dictload">불러오는 중…</div>
+        <iframe id="dictframe" title="표준국어대사전 검색 결과"
+                loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="dictfoot">국립국어원 표준국어대사전 제공</div>
     </aside>
   </div>
 
@@ -657,7 +670,21 @@ footer b{color:var(--ink-soft); font-weight:600}
       const url = "https://stdict.korean.go.kr/search/searchResult.do?searchKeyword="
         + encodeURIComponent(query);
       const f = document.getElementById("dictframe");
-      if (f.dataset.q !== query){ f.src = url; f.dataset.q = query; }
+      const load = document.getElementById("dictload");
+      if (f.dataset.q !== query){
+        // #content 앵커: 사전 사이트의 머리글·메뉴를 건너뛰고 결과부터 보인다.
+        // (그 페이지의 '본문 바로가기'가 가리키는 지점이다.)
+        // 커서는 뺏기지 않는다 — 검색창에서 입력 중이었다면 로드 후 되돌린다.
+        const typing = document.activeElement === elQ;
+        load.style.display = "flex";
+        f.onload = () => {
+          load.style.display = "none";
+          if (typing) elQ.focus({preventScroll: true});
+        };
+        f.src = url + "#content";
+        f.dataset.q = query;
+      }
+      document.getElementById("dictq").textContent = "‘" + query + "’";
       document.getElementById("dictout").href = url;
       pane.hidden = false;
     }, 700);
@@ -731,6 +758,19 @@ footer b{color:var(--ink-soft); font-weight:600}
     ev.preventDefault();
     run();
   });
+  // 어디서든 / 또는 Ctrl(⌘)+K 로 검색창에 간다. 입력 중일 땐 / 를 건드리지 않는다.
+  document.addEventListener("keydown", e => {
+    const el = document.activeElement;
+    const inField = el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+    const slash = e.key === "/" && !inField;
+    const ctrlK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+    if (slash || ctrlK){
+      e.preventDefault();
+      elQ.focus({preventScroll: false});
+      elQ.select();
+    }
+  });
+
   let pending = null;
   elQ.addEventListener("input", () => {
     clearTimeout(pending);
