@@ -47,14 +47,21 @@ def _clip_jpeg(row, part: int = 0) -> bytes | None:
 def build(conn: sqlite3.Connection, out_path: str, *,
           subject: str | None = None, year: int | None = None,
           exam: str | None = None, images: bool | None = None,
-          max_mb: float = DEFAULT_MAX_MB) -> dict:
+          max_mb: float = DEFAULT_MAX_MB,
+          pdf_base_url: str | None = None, pdf_root: str | None = None,
+          upload_url: str | None = None) -> dict:
     """자립형 HTML을 쓰고 요약을 돌려준다.
 
     images=None 이면 예산(max_mb)에 맞는지 보고 알아서 정한다.
     필터를 주면 그 범위만 담는다. 과목이 늘어나면 통째로 담는 대신
     `--subject 국어` 처럼 갈라 뽑는 쪽이 현실적이다.
+
+    pdf_base_url + pdf_root 를 주면 각 문항에 원본 PDF 링크가 붙는다.
+    (pdf_root 아래에 실제로 존재하는 파일만. 예: GitHub blob 주소)
     """
-    from .meta import subject_aliases
+    from urllib.parse import quote
+
+    from .meta import subject_aliases, subject_sort_key
 
     where, params = ["s.kind='question'"], []
     if subject:
@@ -100,8 +107,16 @@ def build(conn: sqlite3.Connection, out_path: str, *,
                     total_bytes += len(jpg)
                     imgs.append("data:image/jpeg;base64,"
                                 + base64.b64encode(jpg).decode())
+        pdf_url = None
+        if pdf_base_url and pdf_root and os.path.exists(row["path"]):
+            rel = os.path.relpath(row["path"], pdf_root)
+            if not rel.startswith(".."):
+                rel = "/".join(quote(seg) for seg in rel.split(os.sep))
+                pdf_url = f"{pdf_base_url}/{rel}"
+
         items.append({
             "id": row["id"],
+            "pdf": pdf_url,
             "src": idx.segment_source(row),
             "subject": row["subject"],
             "num": row["number"],
@@ -116,7 +131,8 @@ def build(conn: sqlite3.Connection, out_path: str, *,
         counts[it["subject"]] = counts.get(it["subject"], 0) + 1
 
     data = {"papers": list(papers.values()), "items": items, "counts": counts,
-            "images": bool(images)}
+            "order": sorted(counts, key=subject_sort_key),
+            "upload": upload_url, "images": bool(images)}
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     html = _TEMPLATE.replace("/*__DATA__*/", "window.GICHUL=" + payload + ";")
@@ -126,7 +142,7 @@ def build(conn: sqlite3.Connection, out_path: str, *,
             "image_bytes": total_bytes, "size": os.path.getsize(out_path)}
 
 
-_TEMPLATE = r"""<title>기출 문항 검색 — 띄어쓰기를 몰라도 찾는다</title>
+_TEMPLATE = r"""<title>기출 용례 검색</title>
 <style>
 /* ── 팔레트: 시험지 지면에서 가져왔다.
       바탕은 인쇄 용지, 글자는 잉크, 강조는 형광펜 연두, 소수 표기는 첨삭 빨강. */
@@ -299,8 +315,8 @@ footer b{color:var(--ink-soft); font-weight:600}
 </style>
 
 <div class="wrap">
-  <p class="eyebrow">기출 문항 검색</p>
-  <h1><span class="hl">빛에너지</span>로 찾으면 <span class="hl">빛 에너지</span>도 나온다</h1>
+  <p class="eyebrow">평가원·교육청 기출</p>
+  <h1>기출 <span class="hl">용례</span> 검색</h1>
   <p class="lede" id="lede"></p>
 
   <div class="search">
@@ -498,6 +514,9 @@ footer b{color:var(--ink-soft); font-weight:600}
         + '<span class="snip">' + snippet(it.text, h.spans, 55) + "</span>"
         + "</summary><div class='body'>"
         + (imgs ? '<p class="rowlabel">원본 지면</p>' + imgs : "")
+        + (it.pdf ? '<p class="sub"><a class="orig" target="_blank" rel="noopener" href="'
+            + esc(it.pdf) + '#page=' + it.page
+            + '">원본 PDF에서 이 쪽 펼치기 (p.' + it.page + ')</a></p>' : "")
         + (tables ? '<p class="rowlabel">표</p>' + tables : "")
         + '<p class="rowlabel">추출된 텍스트</p>'
         + '<pre class="raw">' + esc(readable(it.text)) + "</pre>"
@@ -544,16 +563,20 @@ footer b{color:var(--ink-soft); font-weight:600}
     document.getElementById("lede").innerHTML =
       (span ? esc(span) + " " : "") + "시험지 <b>" + papers.length + "개</b>, 과목 <b>"
       + subs.length + "개</b>, 문항 <b>" + n + "개</b>를 색인했습니다. "
-      + "띄어쓰기를 무시해 찾고, <b>어느 표기가 몇 번 쓰였는지</b> 세어 줍니다."
+      + "<code>빛에너지</code>로 찾으면 <code>빛 에너지</code>도 나오고, "
+      + "<b>어느 표기가 몇 번 쓰였는지</b> 세어 줍니다."
       + (DATA.images ? " 문항을 누르면 원본 지면이 그대로 나옵니다." : "");
 
     const notes = [
       "<p><b>□ 는 읽지 못한 수식 자리입니다.</b> 시험지는 수식을 전용 글꼴로 찍어 "
       + "유니코드 매핑이 없습니다. 수학·화학·물리처럼 수식이 많은 과목에서 두드러지고, "
       + "국어·영어·사탐은 거의 영향이 없습니다.</p>",
-      "<p>검색과 표기 집계는 파이썬 쪽 <code>normalize.py</code> 와 같은 규칙입니다. "
-      + "이 파일은 <code>gichul html</code> 로 다시 만들면 갱신됩니다.</p>",
     ];
+    if (DATA.upload){
+      notes.push('<p><a class="orig" href="' + esc(DATA.upload)
+        + '">PDF 추가하기</a> — 올리면 1~2분 뒤 자동 반영됩니다. '
+        + '같은 파일은 알아서 건너뜁니다.</p>');
+    }
     if (!DATA.images){
       notes.unshift("<p><b>이 파일에는 지면 이미지가 없습니다.</b> 문항 수가 많아 "
         + "텍스트만 담았습니다. 지면을 보려면 <code>gichul web</code> 을 쓰거나 "
@@ -562,7 +585,7 @@ footer b{color:var(--ink-soft); font-weight:600}
     document.getElementById("foot").innerHTML = notes.join("");
   })();
 
-  const subs = Object.keys(DATA.counts).sort();
+  const subs = DATA.order || Object.keys(DATA.counts).sort();
   document.getElementById("subjects").innerHTML =
     '<button class="chip" type="button" data-sub="" aria-pressed="true">전체'
     + '<span class="n">' + DATA.items.length + "</span></button>"

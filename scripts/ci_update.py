@@ -159,39 +159,43 @@ footer{margin-top:2rem;font-size:.82rem;color:var(--soft)}
 """
 
 
-def build_site(conn, site_dir: str) -> list[str]:
+def _copy_pdfs_into_site(pdf_dir: str, site_dir: str) -> int:
+    """PDF 원본을 사이트에 같이 싣는다.
+
+    Pages 는 PDF를 브라우저 뷰어로 바로 열어 주므로, 검색 결과에서
+    `pdfs/….pdf#page=3` 링크가 원문의 해당 쪽을 그대로 펼친다.
+    (GitHub 저장소 파일 보기(blob)는 쪽 이동이 안 된다.)
+    """
+    import shutil
+    n = 0
+    for src in _pdfs(pdf_dir):
+        rel = os.path.relpath(src, pdf_dir)
+        dst = os.path.join(site_dir, "pdfs", rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)
+        n += 1
+    return n
+
+
+def build_site(conn, site_dir: str, pdf_dir: str) -> list[str]:
+    """첫 화면 = 검색 페이지 하나.
+
+    과목별 페이지를 따로 두지 않는다. 검색창의 과목 칩으로 이미 고를 수
+    있는데 목차를 한 번 더 거치게 할 이유가 없다. 지면 이미지는 용량 예산
+    안이면 넣고, 넘으면 빼되 문항마다 원본 PDF 해당 쪽 링크가 남는다.
+    """
     os.makedirs(site_dir, exist_ok=True)
     notes = []
-    entries = []
+    if os.path.isdir(pdf_dir):
+        n = _copy_pdfs_into_site(pdf_dir, site_dir)
+        if n:
+            notes.append(f"원본 PDF {n}개를 사이트에 실음")
 
-    for subject, n_exams, n_q in idx.subjects(conn):
-        if subject == "(미상)":
-            continue
-        fname = f"{subject}.html"
-        r = build(conn, os.path.join(site_dir, fname), subject=subject,
-                  max_mb=PAGE_BUDGET_MB)
-        tag = "" if r["images"] else " · 텍스트만"
-        entries.append((fname, subject, f"시험지 {n_exams} · 문항 {n_q}{tag}"))
-        notes.append(f"{fname}: 문항 {r['questions']} / {r['size']/2**20:.1f}MB"
-                     + ("" if r["images"] else " (이미지 제외)"))
-
-    r = build(conn, os.path.join(site_dir, "전체-텍스트.html"), images=False)
-    entries.append(("전체-텍스트.html", "전체 과목 통합",
-                    f"문항 {r['questions']} · 텍스트만"))
-
-    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-    items = "".join(
-        f'<li><a href="{html.escape(f)}"><span>{html.escape(t)}</span>'
-        f"<small>{html.escape(d)}</small></a></li>"
-        for f, t, d in entries)
-    with open(os.path.join(site_dir, "index.html"), "w", encoding="utf-8") as f:
-        f.write(
-            '<!doctype html><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f"<title>기출 문항 검색</title><style>{_INDEX_CSS}</style>"
-            '<div class="wrap"><h1><span>기출 문항 검색</span></h1>'
-            f"<ul>{items}</ul>"
-            f"<footer>갱신 {now}</footer></div>")
+    r = build(conn, os.path.join(site_dir, "index.html"),
+              max_mb=PAGE_BUDGET_MB, pdf_base_url="pdfs", pdf_root=pdf_dir,
+              upload_url=_upload_url())
+    notes.append(f"index.html: 문항 {r['questions']} / {r['size']/2**20:.1f}MB"
+                 + ("" if r["images"] else " (지면 이미지 없이 — 원본 PDF 링크로 봄)"))
     return notes
 
 
@@ -219,10 +223,10 @@ def write_empty_site(site_dir: str) -> None:
         f.write(
             '<!doctype html><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f"<title>기출 문항 검색</title><style>{_INDEX_CSS}"
+            f"<title>기출 용례 검색</title><style>{_INDEX_CSS}"
             "a.go{display:inline-flex;background:var(--mark);color:#1A1C18;"
             "border:none;font-weight:600}</style>"
-            '<div class="wrap"><h1><span>기출 문항 검색</span></h1>'
+            '<div class="wrap"><h1><span>기출 용례 검색</span></h1>'
             "<p>아직 올라온 시험지가 없습니다. PDF를 올리면 1~2분 뒤 이 자리에 "
             "과목별 검색 페이지가 생깁니다.</p>"
             f"{button}"
@@ -260,7 +264,7 @@ def main() -> int:
         print(f"보고서: {os.path.join(data_dir, 'REPORT.md')}")
 
         if idx.stats(conn)["exams"]:
-            for note in build_site(conn, site_dir):
+            for note in build_site(conn, site_dir, pdf_dir):
                 print(f"페이지: {note}")
         else:
             write_empty_site(site_dir)
