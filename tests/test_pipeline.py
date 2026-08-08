@@ -183,6 +183,63 @@ def test_passage_segment_detected():
         assert passage[0].label == "1~3번 지문"
 
 
+def test_question_starting_with_number_is_detected():
+    # `28. 2024 Green Future …` 처럼 본문이 숫자로 시작해도 문항이다.
+    # 소수점(`1.5`)과 날짜 조각(`3. 15.`)은 여전히 아니다.
+    from gichul.extract import Line
+    lines = [Line(1, f"{n}. 문항 {n}") for n in range(1, 28)]
+    lines += [Line(1, "28. 2024 Green Future Webtoon Contest에 관한 안내문이다."),
+              Line(1, "농도가 1.5 배가 되고"),
+              Line(1, "3. 15. 에 개최되었다"),
+              Line(1, "29. 다음 글의 밑줄 친 부분은?")]
+    segs = segment(lines)
+    numbers = [s.number for s in segs if s.kind == "question"]
+    assert numbers == list(range(1, 30)), numbers
+
+
+def test_selective_sections_restart_numbering():
+    # 수학형: 구획 머리글이 문항보다 먼저 나온다.
+    from gichul.extract import Line
+    lines = [Line(1, f"{n}. 공통 문항 {n}") for n in range(1, 23)]
+    for part in ("확률과 통계", "미적분", "기하"):
+        lines.append(Line(2, f"({part})"))
+        lines += [Line(2, f"{n}. {part} 문항 {n}") for n in range(23, 31)]
+    segs = [s for s in segment(lines) if s.kind == "question"]
+    assert len(segs) == 22 + 8 * 3, len(segs)
+    by_part: dict[str | None, int] = {}
+    for s in segs:
+        by_part[s.part] = by_part.get(s.part, 0) + 1
+    assert by_part == {None: 22, "확률과 통계": 8, "미적분": 8, "기하": 8}, by_part
+    assert segs[-1].label == "기하 30번"
+
+
+def test_section_first_question_before_its_header():
+    # 국어형: 구획 첫 단에는 머리글이 없어 첫 문항이 머리글보다 먼저 나온다.
+    # 표지줄 직후의 번호 되돌아감을 구획 시작으로 보고 소급해서 이름을 붙인다.
+    from gichul.extract import Line
+    lines = [Line(1, f"{n}. 공통 문항 {n}") for n in range(1, 35)]
+    lines += [Line(2, "2025학년도 대학수학능력시험 9월 모의평가 문제지"),
+              Line(2, "제1 교시"),
+              Line(2, "[35～37] 다음은 수업 중 학생의 발표이다."),
+              Line(2, "35. 발표자의 말하기 방식으로 가장 적절한 것은?"),
+              Line(2, "(화법과 작문)")]
+    lines += [Line(2, f"{n}. 화작 문항 {n}") for n in range(36, 46)]
+    lines += [Line(3, "2025학년도 대학수학능력시험 9월 모의평가 문제지"),
+              Line(3, "제1 교시"),
+              Line(3, "35. 언매 첫 문항이다."),
+              Line(3, "(언어와 매체)")]
+    lines += [Line(3, f"{n}. 언매 문항 {n}") for n in range(36, 46)]
+    segs = [s for s in segment(lines) if s.kind in ("question", "passage")]
+    qs = [s for s in segs if s.kind == "question"]
+    assert len(qs) == 34 + 11 + 11, len(qs)
+    parts = {}
+    for s in qs:
+        parts[s.part] = parts.get(s.part, 0) + 1
+    assert parts == {None: 34, "화법과 작문": 11, "언어와 매체": 11}, parts
+    passage = next(s for s in segs if s.kind == "passage")
+    assert passage.part == "화법과 작문" and passage.number == 35
+
+
 def test_question_rects_cover_page_area():
     with tempfile.TemporaryDirectory() as tmp:
         segs = segment(extract(_sample_dir(tmp)[0]).lines)
