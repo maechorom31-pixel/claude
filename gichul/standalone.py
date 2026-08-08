@@ -518,8 +518,15 @@ footer b{color:var(--ink-soft); font-weight:600}
             + esc(it.pdf) + '#page=' + it.page
             + '">원본 PDF에서 이 쪽 펼치기 (p.' + it.page + ')</a></p>' : "")
         + (tables ? '<p class="rowlabel">표</p>' + tables : "")
-        + '<p class="rowlabel">추출된 텍스트</p>'
-        + '<pre class="raw">' + esc(readable(it.text)) + "</pre>"
+        // 지면 이미지가 있으면 추출 텍스트는 접어 둔다. 원문이 그대로 보이는데
+        // 깨진 수식이 섞인 텍스트를 나란히 펼칠 이유가 없다. 복사할 일이 있을
+        // 때만 열면 된다.
+        + (imgs
+            ? "<details class='rawtoggle'><summary class='rowlabel'>추출된 텍스트"
+              + " 펼치기 (복사용)</summary><pre class='raw'>"
+              + esc(readable(it.text)) + "</pre></details>"
+            : '<p class="rowlabel">추출된 텍스트</p><pre class="raw">'
+              + esc(readable(it.text)) + "</pre>")
         + "</div></details>";
     }).join("") + (more ? '<p class="empty">' + more
       + '개 문항이 더 있습니다. 검색어를 좁히거나 과목을 고르세요.</p>' : "");

@@ -126,6 +126,34 @@ def test_meta_from_filename():
     assert (m.year, m.exam, m.subject) == (2026, "6월 모평", "생명과학I")
 
 
+def test_filename_positional_subject():
+    """`연도_시험_과목` 규칙: 셋째 칸부터를 과목으로 믿는다."""
+    cases = [
+        ("2027_대수능_생명과학1.pdf", ("수능", "생명과학I", True)),
+        ("2026_6모_생윤.pdf", ("6월 모평", "생활과윤리", True)),          # 약어
+        ("2026_7월학평_고3_물리학1.pdf", ("7월 학평", "물리학I", True)),   # 학년 건너뜀
+        ("2026_7월학평_과학탐구_물리학1.pdf", ("7월 학평", "물리학I", True)),  # 묶음 이름 건너뜀
+        ("2027_수능_교육학.pdf", ("수능", "교육학", True)),               # 목록에 없어도 자리로 믿음
+        ("2027_대수능_최종본.pdf", ("수능", None, False)),               # 과목 칸이 문서 표기뿐
+    ]
+    for name, (exam, subject, explicit) in cases:
+        m = from_filename(name)
+        assert (m.exam, m.subject, m.explicit) == (exam, subject, explicit), name
+
+
+def test_explicit_filename_beats_wrong_cover_parse():
+    """표지 판독이 틀렸을 때 파일명 자리 규칙으로 바로잡는다."""
+    with tempfile.TemporaryDirectory() as tmp:
+        files = build_all(os.path.join(tmp, "s"))
+        science = files[0]                          # 표지: 생명 과학Ⅰ
+        forced = os.path.join(tmp, "s", "2014_수능_화학1.pdf")
+        os.rename(science, forced)
+        conn = idx.connect(os.path.join(tmp, "t.db"))
+        ingest_paths(conn, [forced])
+        row = conn.execute("SELECT subject, year FROM exams").fetchone()
+        assert (row["subject"], row["year"]) == ("화학I", 2014)
+
+
 # ---------------------------------------------------------------- 추출·분할
 
 def _sample_dir(tmp: str) -> list[str]:
