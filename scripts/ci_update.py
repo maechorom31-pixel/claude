@@ -87,6 +87,32 @@ def repair_meta_from_filenames(conn, pdf_dir: str) -> list[tuple[str, dict]]:
     return fixed
 
 
+def sort_into_year_folders(conn, pdf_dir: str) -> list[tuple[str, str]]:
+    """pdfs/ 바로 아래 놓인 파일을 연도 폴더로 옮긴다.
+
+    업로드 단추는 pdfs/ 루트를 열기 때문에 새 파일은 늘 루트로 들어온다.
+    연도는 색인이 이미 알고 있으니(파일명·표지·폴더 순으로 판독) 사람이
+    옮길 이유가 없다. 옮긴 뒤의 경로는 repair 가 sha1 로 대조해 맞춘다.
+    """
+    moved = []
+    for name in sorted(os.listdir(pdf_dir)):
+        src = os.path.join(pdf_dir, name)
+        if not (os.path.isfile(src) and name.lower().endswith(".pdf")):
+            continue
+        row = idx.already_indexed(conn, idx.file_sha1(src))
+        year = row["year"] if row else from_filename(name).year
+        if not year:
+            continue                     # 연도를 모르면 그대로 둔다 — REPORT 에 미상으로 뜬다
+        dst_dir = os.path.join(pdf_dir, str(year))
+        dst = os.path.join(dst_dir, name)
+        if os.path.exists(dst):
+            continue                     # 같은 이름이 이미 있으면 건드리지 않는다
+        os.makedirs(dst_dir, exist_ok=True)
+        os.rename(src, dst)
+        moved.append((name, str(year)))
+    return moved
+
+
 def target_files(pdf_dir: str, target: str) -> list[str]:
     """연도별 재파싱 대상: 폴더 이름이 target 이거나 파일명이 target 으로 시작."""
     out = []
@@ -114,7 +140,7 @@ def prune_missing(conn, enabled: bool) -> list[str]:
     return [name for _id, name in gone]
 
 
-def write_report(conn, path: str, results, fixed, pruned=()) -> None:
+def write_report(conn, path: str, results, fixed, pruned=(), moved=()) -> None:
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
     lines = ["# 기출 색인 처리 결과", "", f"갱신: {now} (한국 시간)", ""]
 
@@ -136,6 +162,13 @@ def write_report(conn, path: str, results, fixed, pruned=()) -> None:
     if skipped:
         lines.append(f"- ⏭️ 이미 색인된 파일 {skipped}개는 건너뜀")
     lines.append("")
+
+    if moved:
+        lines.append("## 연도 폴더로 정리")
+        lines.append("")
+        for name, year in moved:
+            lines.append(f"- `{name}` → `pdfs/{year}/`")
+        lines.append("")
 
     if pruned:
         lines.append("## 색인에서 뺀 시험지 (원본 PDF 삭제됨, prune 실행)")
@@ -329,6 +362,9 @@ def main() -> int:
                 picked = target_files(pdf_dir, target)
                 print(f"대상 재파싱: '{target}' → {len(picked)}개 파일")
                 results += ingest_paths(conn, picked, force=True)
+        moved = sort_into_year_folders(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
+        if moved:
+            print(f"정리: {len(moved)}개 파일을 연도 폴더로 이동")
         fixed = repair_meta_from_filenames(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
         pruned = prune_missing(conn, os.environ.get("GICHUL_PRUNE") == "1")
         if pruned:
@@ -338,7 +374,8 @@ def main() -> int:
         print(f"저장: 시험지 {n}개 → {archive} "
               f"({os.path.getsize(archive)/2**20:.2f}MB)")
 
-        write_report(conn, os.path.join(data_dir, "REPORT.md"), results, fixed, pruned)
+        write_report(conn, os.path.join(data_dir, "REPORT.md"), results, fixed,
+                     pruned, moved)
         print(f"보고서: {os.path.join(data_dir, 'REPORT.md')}")
 
         if idx.stats(conn)["exams"]:
