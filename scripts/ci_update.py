@@ -28,8 +28,8 @@ sys.path.insert(0, ROOT)
 
 from gichul import index as idx                    # noqa: E402
 from gichul.archive import export_jsonl, import_jsonl   # noqa: E402
-from gichul.meta import from_filename              # noqa: E402
-from gichul.pipeline import _year_from_dirs        # noqa: E402
+from gichul.meta import from_filename, subject_sort_key   # noqa: E402
+from gichul.pipeline import PARSER_VERSION, _year_from_dirs   # noqa: E402
 from gichul.pipeline import ingest_paths           # noqa: E402
 from gichul.standalone import build                # noqa: E402
 
@@ -85,6 +85,30 @@ def repair_meta_from_filenames(conn, pdf_dir: str) -> list[tuple[str, dict]]:
             fixed.append((os.path.basename(path), updates))
     conn.commit()
     return fixed
+
+
+def sweep_repo_root(repo_dir: str, pdf_dir: str) -> list[tuple[str, str]]:
+    """저장소 맨 위에 잘못 올라온 PDF를 pdfs/ 로 거둔다.
+
+    업로드 화면을 저장소 첫 화면에서 열면 파일이 저장소 루트로 들어간다.
+    색인은 pdfs/ 만 보므로 여기 놓인 파일은 영영 처리되지 않는다 — 옮긴
+    뒤는 여느 업로드처럼 색인되고 연도 폴더로 정리된다.
+    """
+    moved = []
+    for name in sorted(os.listdir(repo_dir)):
+        src = os.path.join(repo_dir, name)
+        if not (os.path.isfile(src) and name.lower().endswith(".pdf")):
+            continue
+        os.makedirs(pdf_dir, exist_ok=True)
+        dst = os.path.join(pdf_dir, name)
+        if os.path.exists(dst):
+            if idx.file_sha1(dst) == idx.file_sha1(src):
+                os.remove(src)
+                moved.append((name, "`pdfs/` 에 이미 있음 · 중복 제거"))
+            continue
+        os.rename(src, dst)
+        moved.append((name, "저장소 맨 위에 있어 `pdfs/` 로 이동"))
+    return moved
 
 
 def sort_into_year_folders(conn, pdf_dir: str) -> list[tuple[str, str]]:
@@ -204,6 +228,30 @@ def write_report(conn, path: str, results, fixed, pruned=(), moved=()) -> None:
         lines.append("")
         for row in unknown:
             lines.append(f"- `{row['filename']}`")
+        lines.append("")
+
+    _exam_order = {"6월 모평": 0, "9월 모평": 1, "수능": 2}
+    cov: dict[tuple, dict[str, int]] = {}
+    subjects_seen: set[str] = set()
+    for r in conn.execute("SELECT year, exam, subject, n_questions FROM exams "
+                          "WHERE subject IS NOT NULL"):
+        key = (r["year"] or 0, r["exam"] or "?")
+        cov.setdefault(key, {})[r["subject"]] = \
+            cov.get(key, {}).get(r["subject"], 0) + (r["n_questions"] or 0)
+        subjects_seen.add(r["subject"])
+    if cov:
+        cols = sorted(subjects_seen, key=subject_sort_key)
+        lines.append("## 보유 현황 — 어느 시험의 어떤 과목이 올라와 있나")
+        lines.append("")
+        lines.append("숫자는 문항 수, ─ 는 아직 안 올라온 과목. "
+                     "0 은 올라왔지만 글자를 못 읽은 파일(스캔본)이다.")
+        lines.append("")
+        lines.append("| 시험 \\ 과목 | " + " | ".join(cols) + " |")
+        lines.append("|---|" + "---:|" * len(cols))
+        for (year, exam) in sorted(cov, key=lambda k: (-k[0], _exam_order.get(k[1], 9))):
+            row = cov[(year, exam)]
+            cells = [str(row[c]) if c in row else "─" for c in cols]
+            lines.append(f"| {year}학년도 {exam} | " + " | ".join(cells) + " |")
         lines.append("")
 
     lines.append("## 전체 현황")
@@ -364,6 +412,10 @@ def main() -> int:
             r = import_jsonl(conn, archive)
             print(f"복원: 시험지 {r['added']}개 (data/archive.jsonl.gz)")
 
+        swept = sweep_repo_root(ROOT, pdf_dir)
+        if swept:
+            print(f"정리: 저장소 맨 위의 PDF {len(swept)}개를 pdfs/ 로 이동")
+
         results = []
         if os.path.isdir(pdf_dir):
             results = ingest_paths(conn, [pdf_dir], force=force)
@@ -377,7 +429,19 @@ def main() -> int:
         moved = sort_into_year_folders(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
         if moved:
             print(f"정리: {len(moved)}개 파일을 연도 폴더로 이동")
+        moved = swept + moved
         fixed = repair_meta_from_filenames(conn, pdf_dir) if os.path.isdir(pdf_dir) else []
+
+        # 파서가 좋아졌으면(PARSER_VERSION 인상) 옛 버전으로 파싱된 시험지를
+        # 알아서 다시 파싱한다. force 를 손으로 켤 필요가 없다.
+        if not force:
+            stale = [row["path"] for row in conn.execute(
+                "SELECT path FROM exams WHERE COALESCE(parser,0) < ?",
+                (PARSER_VERSION,)) if os.path.isfile(row["path"])]
+            if stale:
+                print(f"파서 개선(v{PARSER_VERSION}): 시험지 {len(stale)}개를 다시 파싱")
+                results += ingest_paths(conn, stale, force=True)
+
         pruned = prune_missing(conn, os.environ.get("GICHUL_PRUNE") == "1")
         if pruned:
             print(f"정리: 원본이 없는 시험지 {len(pruned)}개를 색인에서 뺌")

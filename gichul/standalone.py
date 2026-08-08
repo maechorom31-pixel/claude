@@ -367,6 +367,17 @@ footer b{color:var(--ink-soft); font-weight:600}
 .abtn:hover{border-color:var(--ink-faint)}
 .abtn span{font-weight:600; font-size:.85rem}
 .abtn small{display:block; color:var(--ink-faint); font-size:.74rem}
+details.cover{margin-top:1rem}
+details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
+.coverwrap{overflow-x:auto; margin-top:.6rem}
+.coverwrap table{border-collapse:collapse; font-size:.76rem; white-space:nowrap}
+.coverwrap th,.coverwrap td{
+  border:1px solid var(--rule); padding:.25rem .5rem; text-align:right;
+}
+.coverwrap thead th,.coverwrap tbody th{
+  background:var(--sunken); text-align:left; font-weight:600; color:var(--ink-soft)
+}
+.coverwrap td.miss{color:var(--ink-faint); text-align:center}
 @media (prefers-reduced-motion:no-preference){
   details.hit{transition:border-color .15s ease}
 }
@@ -418,6 +429,7 @@ footer b{color:var(--ink-soft); font-weight:600}
   "use strict";
   const DATA = window.GICHUL;
   const OBJ = "￼";
+  let curQuery = "";                 // 지면 형광펜이 쓸 현재 검색어
   const FOLD = {"‐":"-","‑":"-","‒":"-","–":"-","—":"-",
     "―":"-","−":"-","‘":"'","’":"'","“":'"',"”":'"',
     "～":"~","〜":"~"};
@@ -625,7 +637,7 @@ footer b{color:var(--ink-soft); font-weight:600}
         d.querySelectorAll(".clips[data-id]").forEach(box => {
           const it = byId.get(Number(box.dataset.id));
           box.removeAttribute("data-id");
-          drawClips(box, it);
+          drawClips(box, it, curQuery);
         });
       });
     });
@@ -658,7 +670,62 @@ footer b{color:var(--ink-soft); font-weight:600}
     return c;
   }
 
-  async function drawClips(box, it){
+  // 지면 위 형광펜: 페이지의 글자별 위치를 한 번 뽑아 두고, 검색어와
+  // 같은 규칙(띄어쓰기 무시)으로 맞춰 해당 글자 자리를 노랗게 칠한다.
+  const _pageText = new Map();       // "url#page" -> {key, boxes}
+  async function pageText(url, pageNo){
+    const k = url + "#" + pageNo;
+    if (_pageText.has(k)) return _pageText.get(k);
+    const doc = await getDoc(url);
+    const page = await doc.getPage(pageNo);
+    const vp = page.getViewport({scale: 1});
+    const tc = await page.getTextContent();
+    const buf = [], boxes = [];
+    for (const item of tc.items){
+      if (!item.str) continue;
+      const t = pdfjsLib.Util.transform(vp.transform, item.transform);
+      const fh = Math.hypot(t[2], t[3]) || 10;
+      const n = item.str.length;
+      const adv = (item.width || 0) / Math.max(1, n);  // 글자폭은 균등 근사
+      for (let i = 0; i < n; i++){
+        const ch = item.str[i];
+        if (ch === OBJ || /\s/.test(ch)) continue;
+        buf.push(FOLD[ch] || ch);
+        boxes.push([t[4] + adv * i, t[5] - fh * 0.88, adv, fh * 1.08]);
+      }
+    }
+    const rec = {key: buf.join(""), boxes};
+    if (_pageText.size > 12) _pageText.delete(_pageText.keys().next().value);
+    _pageText.set(k, rec);
+    return rec;
+  }
+
+  function matchRects(rec, query){
+    const key = queryKey(query), out = [];
+    if (!key || !rec.key) return out;
+    let from = 0;
+    for (;;){
+      const p = rec.key.indexOf(key, from);
+      if (p < 0) break;
+      let run = null;                  // 같은 줄의 글자들을 한 칠로 잇는다
+      for (let i = p; i < p + key.length; i++){
+        const b = rec.boxes[i];
+        if (run && Math.abs(b[1] - run[1]) < b[3] * 0.7){
+          const x1 = Math.max(run[0] + run[2], b[0] + b[2]);
+          run[0] = Math.min(run[0], b[0]);
+          run[2] = x1 - run[0];
+          run[3] = Math.max(run[3], b[3]);
+        } else {
+          run = [b[0], b[1], b[2], b[3]];
+          out.push(run);
+        }
+      }
+      from = p + 1;
+    }
+    return out;
+  }
+
+  async function drawClips(box, it, query){
     const url = it.pdf.split("#")[0];
     try{
       for (const r of it.rects){
@@ -670,9 +737,25 @@ footer b{color:var(--ink-soft); font-weight:600}
         c.width = w; c.height = h;
         c.className = "clip";
         c.style.width = Math.round(x1 - x0) + "px";
-        c.getContext("2d").drawImage(full,
+        const ctx = c.getContext("2d");
+        ctx.drawImage(full,
           Math.round(x0 * CLIP_SCALE), Math.round(y0 * CLIP_SCALE), w, h,
           0, 0, w, h);
+        if (query){
+          try{
+            const rec = await pageText(url, pg);
+            // multiply 라 흰 종이는 노랗게, 글자는 그대로 — 형광펜과 같다
+            ctx.globalCompositeOperation = "multiply";
+            ctx.fillStyle = "#ffe45e";
+            for (const m of matchRects(rec, query)){
+              const rx = (m[0] - x0) * CLIP_SCALE, ry = (m[1] - y0) * CLIP_SCALE;
+              const rw = m[2] * CLIP_SCALE, rh = m[3] * CLIP_SCALE;
+              if (rx + rw < 0 || ry + rh < 0 || rx > w || ry > h) continue;
+              ctx.fillRect(rx - 2, ry - 1, rw + 4, rh + 2);
+            }
+            ctx.globalCompositeOperation = "source-over";
+          } catch (e){ /* 형광펜은 덤 — 못 칠해도 지면은 보여 준다 */ }
+        }
         box.appendChild(c);
       }
     } catch (e){
@@ -718,6 +801,7 @@ footer b{color:var(--ink-soft); font-weight:600}
       elResults.innerHTML = '<p class="empty">위에 낱말을 넣거나 예시를 눌러 보세요.</p>';
       return;
     }
+    curQuery = query;
     renderSummary(query, hits);
     renderResults(hits);
     updateDict(query);
@@ -745,6 +829,38 @@ footer b{color:var(--ink-soft); font-weight:600}
       + "유니코드 매핑이 없습니다. 수학·화학·물리처럼 수식이 많은 과목에서 두드러지고, "
       + "국어·영어·사탐은 거의 영향이 없습니다.</p>",
     ];
+    (function coverage(){
+      // 보유 현황: 어느 학년도·시험의 어떤 과목이 올라와 있고 뭐가 빠졌나.
+      const order = {"6월 모평": 0, "9월 모평": 1, "수능": 2};
+      const cov = {}, seen = new Set();
+      DATA.papers.forEach(p => {
+        if (!p.subject) return;
+        const k = (p.year || 0) + "|" + (p.exam || "?");
+        (cov[k] = cov[k] || {})[p.subject] =
+          (cov[k][p.subject] || 0) + (p.questions || 0);
+        seen.add(p.subject);
+      });
+      const keys = Object.keys(cov);
+      if (!keys.length) return;
+      const cols = (DATA.order || []).filter(s => seen.has(s));
+      keys.sort((a, b) => {
+        const [ya, ea] = a.split("|"), [yb, eb] = b.split("|");
+        return (yb - ya) || ((order[ea] ?? 9) - (order[eb] ?? 9));
+      });
+      let html = '<table><thead><tr><th>시험 \\ 과목</th>'
+        + cols.map(c => "<th>" + esc(c) + "</th>").join("") + "</tr></thead><tbody>";
+      keys.forEach(k => {
+        const [y, e2] = k.split("|");
+        html += "<tr><th>" + esc(y + "학년도 " + e2) + "</th>"
+          + cols.map(c => c in cov[k]
+              ? '<td>' + cov[k][c] + "</td>"
+              : '<td class="miss">─</td>').join("") + "</tr>";
+      });
+      html += "</tbody></table>";
+      notes.push('<details class="cover"><summary>보유 현황 — 뭘 올렸고 뭐가 빠졌나</summary>'
+        + '<div class="coverwrap">' + html + '</div>'
+        + '<p>숫자는 문항 수, ─ 는 아직 안 올라온 과목입니다.</p></details>');
+    })();
     if (DATA.upload || DATA.repo){
       const r = DATA.repo, rows = [];
       if (DATA.upload) rows.push(['PDF 올리기', DATA.upload,
