@@ -292,6 +292,7 @@ button.go{
   gap:1rem; padding:.6rem .9rem; border-bottom:1px solid var(--rule);
   font-size:.85rem; color:var(--ink-soft)}
 .dicttitle b{color:var(--ink); font-weight:700}
+.dictlinks{display:flex; gap:.8rem; flex-shrink:0}
 .dicthead a{color:var(--focus); text-decoration:none; font-size:.8rem;
   white-space:nowrap}
 .dicthead a:hover{text-decoration:underline}
@@ -406,14 +407,22 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
     <aside class="dict" id="dict" hidden>
       <div class="dicthead">
         <span class="dicttitle">표준국어대사전 <b id="dictq"></b></span>
-        <a id="dictout" target="_blank" rel="noopener">새 창 ↗</a>
+        <span class="dictlinks">
+          <a href="https://nara-speller.co.kr/speller/" target="_blank"
+             rel="noopener" title="바른한글 맞춤법·문법 검사 (새 창)">맞춤법 검사 ↗</a>
+          <a id="dictout" target="_blank" rel="noopener">새 창 ↗</a>
+        </span>
       </div>
       <div class="dictbody">
         <div class="dictload" id="dictload">불러오는 중…</div>
+        <!-- sandbox(스크립트 차단): 사전 페이지가 로드될 때 제 검색창에
+             focus() 를 걸어 이쪽 커서를 빼앗는다. 결과는 서버에서 그려져
+             오므로 스크립트 없이도 잘 보인다. -->
         <iframe id="dictframe" title="표준국어대사전 검색 결과"
+                sandbox="allow-same-origin allow-forms allow-popups"
                 loading="lazy" tabindex="-1"></iframe>
       </div>
-      <div class="dictfoot">국립국어원 표준국어대사전 제공</div>
+      <div class="dictfoot">국립국어원 표준국어대사전 제공 · 맞춤법 검사는 바른한글(나라인포테크)</div>
     </aside>
   </div>
 
