@@ -345,15 +345,23 @@ footer b{color:var(--ink-soft); font-weight:600}
   }
   function queryKey(q){ return nospaceMap(q.normalize("NFC")).key; }
 
-  function findSpans(text, query){
+  // 문항마다 정규화를 매번 다시 하면 수천 문항에서 글자 하나에 1초가 넘게
+  // 걸린다. 키와 위치 매핑을 로드 때 한 번만 만들어 둔다.
+  for (const it of DATA.items){
+    const m = nospaceMap(it.text);
+    it._key = m.key;
+    it._idx = m.idx;
+  }
+
+  function findSpans(it, query){
     const key = queryKey(query);
     if (!key) return [];
-    const m = nospaceMap(text), out = [];
+    const out = [];
     let from = 0;
     for (;;){
-      const pos = m.key.indexOf(key, from);
+      const pos = it._key.indexOf(key, from);
       if (pos < 0) break;
-      out.push([m.idx[pos], m.idx[pos + key.length - 1] + 1]);
+      out.push([it._idx[pos], it._idx[pos + key.length - 1] + 1]);
       from = pos + 1;
     }
     return out;
@@ -367,7 +375,7 @@ footer b{color:var(--ink-soft); font-weight:600}
     const out = [];
     for (const it of DATA.items){
       if (subject && it.subject !== subject) continue;
-      const spans = findSpans(it.text, query);
+      const spans = findSpans(it, query);
       if (spans.length) out.push({it: it, spans: spans});
     }
     return out;
@@ -460,9 +468,13 @@ footer b{color:var(--ink-soft); font-weight:600}
     elSummary.innerHTML = html;
   }
 
+  const RENDER_CAP = 200;   // 카드 수천 장을 그리면 그리기 자체가 1초를 넘긴다
+
   function renderResults(hits){
     if (!hits.length) return;
-    elResults.innerHTML = hits.map(h => {
+    const shown = hits.slice(0, RENDER_CAP);
+    const more = hits.length - shown.length;
+    elResults.innerHTML = shown.map(h => {
       const it = h.it;
       const imgs = it.imgs.map((_, i) =>
         '<img class="clip" data-src="' + i + '" data-id="' + it.id
@@ -490,9 +502,10 @@ footer b{color:var(--ink-soft); font-weight:600}
         + '<p class="rowlabel">추출된 텍스트</p>'
         + '<pre class="raw">' + esc(readable(it.text)) + "</pre>"
         + "</div></details>";
-    }).join("");
+    }).join("") + (more ? '<p class="empty">' + more
+      + '개 문항이 더 있습니다. 검색어를 좁히거나 과목을 고르세요.</p>' : "");
 
-    // 이미지는 열 때 붙인다. 80장을 한꺼번에 그리면 첫 화면이 느려진다.
+    // 이미지는 열 때 붙인다. 한꺼번에 그리면 첫 화면이 느려진다.
     const byId = new Map(DATA.items.map(i => [i.id, i]));
     elResults.querySelectorAll("details.hit").forEach(d => {
       d.addEventListener("toggle", () => {
@@ -569,7 +582,11 @@ footer b{color:var(--ink-soft); font-weight:600}
     ev.preventDefault();
     run();
   });
-  elQ.addEventListener("input", run);
+  let pending = null;
+  elQ.addEventListener("input", () => {
+    clearTimeout(pending);
+    pending = setTimeout(run, 120);
+  });
 
   run();
 })();
