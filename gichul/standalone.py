@@ -243,6 +243,18 @@ button.go{
   font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
   color:var(--ink-faint); margin:.9rem 0 .4rem;
 }
+.subjfold summary{
+  display:flex; align-items:baseline; gap:.6rem; cursor:pointer;
+  list-style:none; margin-bottom:.5rem; -webkit-user-select:none; user-select:none;
+}
+.subjfold summary::-webkit-details-marker{display:none}
+.subjfold summary .rowlabel{margin:0}
+.subjfold #subjcur{font-size:.85rem; font-weight:600; color:var(--ink-soft)}
+.subjfold summary::after{
+  content:"펼치기 ▾"; font-size:.72rem; color:var(--ink-faint); margin-left:auto;
+}
+.subjfold[open] summary::after{content:"접기 ▴"}
+@media (min-width:700px){ .subjfold summary::after{content:"" !important} }
 .chips{display:flex; flex-wrap:wrap; gap:.35rem}
 .chip{
   font:.85rem var(--sans); color:var(--ink-soft); cursor:pointer;
@@ -394,12 +406,14 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
 
   <div class="search">
     <form class="field" id="form">
-      <input id="q" type="search" placeholder="찾을 낱말이나 표현" autocomplete="off"
-             aria-label="찾을 낱말이나 표현">
+      <input id="q" type="search" placeholder="찾을 낱말 · 쉼표로 두 표현 비교"
+             autocomplete="off" aria-label="찾을 낱말이나 표현">
       <button class="go" type="submit">찾기</button>
     </form>
-    <p class="rowlabel">과목</p>
-    <div class="chips" id="subjects"></div>
+    <details class="subjfold" id="subjfold" open>
+      <summary><span class="rowlabel">과목</span><b id="subjcur">전체</b></summary>
+      <div class="chips" id="subjects"></div>
+    </details>
   </div>
 
   <div class="cols">
@@ -441,7 +455,7 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
   "use strict";
   const DATA = window.GICHUL;
   const OBJ = "￼";
-  let curQuery = "";                 // 지면 형광펜이 쓸 현재 검색어
+  let curQuery = [];                 // 지면 형광펜이 쓸 현재 검색어(들)
   const FOLD = {"‐":"-","‑":"-","‒":"-","–":"-","—":"-",
     "―":"-","−":"-","‘":"'","’":"'","“":'"',"”":'"',
     "～":"~","〜":"~"};
@@ -494,6 +508,75 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
       if (spans.length) out.push({it: it, spans: spans});
     }
     return out;
+  }
+
+  // `것은, 것을` 이나 `때문에 vs 이므로` 처럼 두세 표현을 나란히 비교한다.
+  // 윤문에서 "평가원은 어느 쪽을 쓰는가"를 정할 때 쓴다.
+  function splitTerms(q){
+    const parts = q.split(/\s+vs\s+|[,，]/i).map(s => s.trim()).filter(Boolean);
+    return parts.length >= 2 ? parts.slice(0, 5) : [q];
+  }
+
+  function searchMulti(terms, subject){
+    const per = terms.map(() => []);
+    const union = [];
+    for (const it of DATA.items){
+      if (subject && it.subject !== subject) continue;
+      let all = null;
+      terms.forEach((t, i) => {
+        const spans = findSpans(it, t);
+        if (spans.length){
+          per[i].push({it: it, spans: spans});
+          (all = all || []).push.apply(all, spans);
+        }
+      });
+      if (all){
+        all.sort((a, b) => a[0] - b[0]);
+        union.push({it: it, spans: all});
+      }
+    }
+    return {per: per, union: union};
+  }
+
+  function renderCompare(terms, per, union){
+    if (!union.length){
+      elSummary.innerHTML = "";
+      elResults.innerHTML = '<p class="empty">'
+        + terms.map(t => "‘" + esc(t) + "’").join(" · ")
+        + ' — 모두 기출에 없습니다.</p>';
+      return;
+    }
+    const stats = terms.map((t, i) => ({
+      term: t,
+      n: per[i].length,
+      occ: per[i].reduce((s, h) => s + h.spans.length, 0),
+      src: per[i].length ? per[i][0].it.src : null,
+    }));
+    const total = stats.reduce((s, x) => s + x.occ, 0) || 1;
+    const bar = stats.map((x, i) =>
+      '<span style="width:' + (x.occ * 100 / total) + '%;background:'
+      + SHADES[Math.min(i, SHADES.length - 1)] + '"></span>').join("");
+    const rows = stats.map((x, i) =>
+      '<li><span class="swatch" style="background:'
+      + SHADES[Math.min(i, SHADES.length - 1)] + '"></span>'
+      + '<span class="form' + (x.occ && x.occ === Math.max.apply(null, stats.map(s2 => s2.occ))
+          && stats.filter(s2 => s2.occ === x.occ).length === 1 ? " dominant" : "")
+      + '">' + esc(x.term) + '</span>'
+      + '<span class="pct">' + x.occ + '회 · ' + x.n + '문항 · '
+      + Math.round(x.occ * 100 / total) + '%</span></li>').join("");
+    const best = stats.slice().sort((a, b) => b.occ - a.occ);
+    let verdict = "";
+    if (best[0].occ && (!best[1] || best[0].occ > best[1].occ)){
+      verdict = '<p class="verdict"><span class="lead">우세 표현 &rarr;</span> <b>'
+        + esc(best[0].term) + '</b> <span class="pct">('
+        + Math.round(best[0].occ * 100 / total) + '%'
+        + (best[0].src ? ' · ' + best[0].src + ' 등' : '') + ')</span></p>';
+    }
+    elSummary.innerHTML =
+      '<p class="count">표현 비교 · 전체 <b>' + union.length + '</b>개 문항</p>'
+      + '<div class="dist"><h2>어느 쪽을 쓰나</h2>'
+      + '<div class="bar" role="presentation">' + bar + '</div>'
+      + '<ul class="forms">' + rows + '</ul>' + verdict + '</div>';
   }
 
   // 줄바꿈이나 읽지 못한 수식을 사이에 둔 경우는 띄어쓰기를 판정할 수 없다.
@@ -774,17 +857,19 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
         ctx.drawImage(full,
           Math.round(x0 * CLIP_SCALE), Math.round(y0 * CLIP_SCALE), w, h,
           0, 0, w, h);
-        if (query){
+        if (query && query.length){
           try{
             const rec = await pageText(url, pg);
             // multiply 라 흰 종이는 노랗게, 글자는 그대로 — 형광펜과 같다
             ctx.globalCompositeOperation = "multiply";
             ctx.fillStyle = "#ffe45e";
-            for (const m of matchRects(rec, query)){
-              const rx = (m[0] - x0) * CLIP_SCALE, ry = (m[1] - y0) * CLIP_SCALE;
-              const rw = m[2] * CLIP_SCALE, rh = m[3] * CLIP_SCALE;
-              if (rx + rw < 0 || ry + rh < 0 || rx > w || ry > h) continue;
-              ctx.fillRect(rx - 2, ry - 1, rw + 4, rh + 2);
+            for (const q of query){
+              for (const m of matchRects(rec, q)){
+                const rx = (m[0] - x0) * CLIP_SCALE, ry = (m[1] - y0) * CLIP_SCALE;
+                const rw = m[2] * CLIP_SCALE, rh = m[3] * CLIP_SCALE;
+                if (rx + rw < 0 || ry + rh < 0 || rx > w || ry > h) continue;
+                ctx.fillRect(rx - 2, ry - 1, rw + 4, rh + 2);
+              }
             }
             ctx.globalCompositeOperation = "source-over";
           } catch (e){ /* 형광펜은 덤 — 못 칠해도 지면은 보여 준다 */ }
@@ -835,16 +920,24 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
     const state = query + "|" + (subject || "");
     if (state === lastState) return;      // 같은 검색을 다시 그릴 이유가 없다
     lastState = state;
-    const hits = query ? search(query, subject) : [];
     if (!query){
       elSummary.innerHTML = "";
       elResults.innerHTML = '<p class="empty">위 칸에 낱말을 넣어 보세요.</p>';
+      curQuery = [];
       return;
     }
-    curQuery = query;
-    renderSummary(query, hits);
-    renderResults(hits);
-    updateDict(query);
+    const terms = splitTerms(query);
+    curQuery = terms;
+    if (terms.length > 1){
+      const m = searchMulti(terms, subject);
+      renderCompare(terms, m.per, m.union);
+      renderResults(m.union);
+    } else {
+      const hits = search(terms[0], subject);
+      renderSummary(terms[0], hits);
+      renderResults(hits);
+    }
+    updateDict(terms[0]);
   }
 
   // 머리말과 꼬리말은 실제로 담긴 내용에서 만든다. 과목이 늘어나도 문구가 어긋나지 않게.
@@ -931,12 +1024,21 @@ details.cover summary{cursor:pointer; font-weight:600; color:var(--ink-soft)}
     + subs.map(s => '<button class="chip" type="button" data-sub="' + esc(s)
         + '" aria-pressed="false">' + esc(s)
         + '<span class="n">' + DATA.counts[s] + "</span></button>").join("");
+
+  // 좁은 화면에서 과목 칩 열일곱 개가 화면 반을 차지하면 결과가 밀려난다.
+  // 접어 두고, 고른 과목은 접힌 제목줄에 보여 준다.
+  const subjFold = document.getElementById("subjfold");
+  const narrow = window.matchMedia("(max-width: 699px)");
+  if (narrow.matches) subjFold.open = false;
+
   document.getElementById("subjects").addEventListener("click", ev => {
     const b = ev.target.closest("[data-sub]");
     if (!b) return;
     subject = b.dataset.sub;
     document.querySelectorAll("[data-sub]").forEach(x =>
       x.setAttribute("aria-pressed", String(x === b)));
+    document.getElementById("subjcur").textContent = subject || "전체";
+    if (narrow.matches) subjFold.open = false;
     run();
   });
 
